@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { LoaderFunctionArgs, ActionFunctionArgs } from '@react-router/node';
 import { useLoaderData, Form, useActionData, useNavigation, useNavigate } from 'react-router';
 import { useAppBridge } from '@shopify/app-bridge-react';
@@ -79,6 +79,17 @@ export default function Settings() {
   const navigate = useNavigate();
   const isSubmitting = navigation.state === 'submitting';
 
+  // State for all form fields
+  const [companyName, setCompanyName] = useState(settings?.companyName || '');
+  const [address, setAddress] = useState(settings?.address || '');
+  const [city, setCity] = useState(settings?.city || '');
+  const [postalCode, setPostalCode] = useState(settings?.postalCode || '');
+  const [country, setCountry] = useState(settings?.country || '');
+  const [taxId, setTaxId] = useState(settings?.taxId || '');
+  const [email, setEmail] = useState(settings?.email || '');
+  const [phone, setPhone] = useState(settings?.phone || '');
+  const [locale, setLocale] = useState(settings?.locale || 'en');
+
   useEffect(() => {
     if (actionData?.success) {
       shopify.toast.show(actionData.message);
@@ -114,7 +125,8 @@ export default function Settings() {
                   label="Company Name"
                   name="companyName"
                   autoComplete="organization"
-                  defaultValue={settings?.companyName || ''}
+                  value={companyName}
+                  onChange={setCompanyName}
                   requiredIndicator
                 />
 
@@ -122,7 +134,8 @@ export default function Settings() {
                   label="Address"
                   name="address"
                   autoComplete="street-address"
-                  defaultValue={settings?.address || ''}
+                  value={address}
+                  onChange={setAddress}
                 />
 
                 <FormLayout.Group>
@@ -130,13 +143,15 @@ export default function Settings() {
                     label="City"
                     name="city"
                     autoComplete="address-level2"
-                    defaultValue={settings?.city || ''}
+                    value={city}
+                    onChange={setCity}
                   />
                   <TextField
                     label="Postal Code"
                     name="postalCode"
                     autoComplete="postal-code"
-                    defaultValue={settings?.postalCode || ''}
+                    value={postalCode}
+                    onChange={setPostalCode}
                   />
                 </FormLayout.Group>
 
@@ -144,13 +159,15 @@ export default function Settings() {
                   label="Country"
                   name="country"
                   autoComplete="country"
-                  defaultValue={settings?.country || ''}
+                  value={country}
+                  onChange={setCountry}
                 />
 
                 <TextField
                   label="Tax ID / Business Number"
                   name="taxId"
-                  defaultValue={settings?.taxId || ''}
+                  value={taxId}
+                  onChange={setTaxId}
                   helpText="Your business registration number or tax ID"
                 />
 
@@ -160,14 +177,16 @@ export default function Settings() {
                     name="email"
                     type="email"
                     autoComplete="email"
-                    defaultValue={settings?.email || ''}
+                    value={email}
+                    onChange={setEmail}
                   />
                   <TextField
                     label="Phone"
                     name="phone"
                     type="tel"
                     autoComplete="tel"
-                    defaultValue={settings?.phone || ''}
+                    value={phone}
+                    onChange={setPhone}
                   />
                 </FormLayout.Group>
 
@@ -175,7 +194,8 @@ export default function Settings() {
                   label="Invoice Language"
                   name="locale"
                   options={localeOptions}
-                  value={settings?.locale || 'en'}
+                  value={locale}
+                  onChange={setLocale}
                   helpText="Select the language for your invoice PDFs"
                 />
 
