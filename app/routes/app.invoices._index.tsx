@@ -1,5 +1,17 @@
+import { useState } from 'react';
 import type { LoaderFunctionArgs } from '@react-router/node';
-import { useLoaderData, Link } from 'react-router';
+import { useLoaderData } from 'react-router';
+import { useAppBridge } from '@shopify/app-bridge-react';
+import {
+  Page,
+  Card,
+  EmptyState,
+  Badge,
+  Button,
+  DataTable,
+  BlockStack,
+  Banner,
+} from '@shopify/polaris';
 import { authenticate } from '../shopify.server';
 import db from '../db.server';
 
@@ -17,100 +29,125 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function InvoicesIndex() {
   const { invoices } = useLoaderData<typeof loader>();
+  const shopify = useAppBridge();
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const downloadPDF = async (invoiceId: string, invoiceNumber: string) => {
+    try {
+      setDownloadingId(invoiceId);
+      shopify.toast.show('Generating PDF...');
+      
+      const response = await fetch(`/app/invoices/${invoiceId}/download`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/pdf',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoiceNumber}.pdf`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      shopify.toast.show('PDF downloaded successfully');
+    } catch (err: any) {
+      shopify.toast.show(`Failed to download PDF: ${err.message}`, { isError: true });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const rows = invoices.map((invoice) => [
+    invoice.invoiceNumber,
+    invoice.orderNumber,
+    invoice.customerName || '-',
+    `${invoice.currency} ${invoice.totalAmount}`,
+    new Date(invoice.createdAt).toLocaleDateString(),
+    invoice.emailSent ? (
+      <Badge tone="success">Sent</Badge>
+    ) : (
+      <Badge tone="info">Not sent</Badge>
+    ),
+    <Button
+      size="slim"
+      onClick={() => downloadPDF(invoice.id, invoice.invoiceNumber)}
+      loading={downloadingId === invoice.id}
+    >
+      Download
+    </Button>,
+  ]);
 
   return (
-    <div style={{ padding: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 'bold' }}>Invoices</h1>
-        <Link
-          to="/app/settings"
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#5C6AC4',
-            color: 'white',
-            borderRadius: '4px',
-            textDecoration: 'none',
-          }}
-        >
-          Settings
-        </Link>
-      </div>
-
-      {invoices.length === 0 ? (
-        <div style={{ 
-          padding: '40px', 
-          textAlign: 'center', 
-          backgroundColor: '#f5f5f5', 
-          borderRadius: '8px' 
-        }}>
-          <p style={{ fontSize: '16px', color: '#666' }}>
-            No invoices yet. Invoices will be automatically generated when orders are created.
+    <Page
+      title="Invoices"
+      subtitle="View and manage all your invoices"
+      primaryAction={{
+        content: 'Settings',
+        url: '/app/settings',
+      }}
+      backAction={{ url: '/app' }}
+    >
+      <BlockStack gap="500">
+        <Banner tone="info">
+          <p>
+            Invoices are automatically generated when orders are created.
+            Configure your company information in Settings to customize your invoices.
           </p>
-          <p style={{ fontSize: '14px', color: '#999', marginTop: '10px' }}>
-            Make sure to configure your company settings first.
-          </p>
-        </div>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #e5e5e5' }}>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Invoice #</th>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Order #</th>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Customer</th>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Total</th>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Date</th>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Email</th>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoices.map((invoice) => (
-              <tr key={invoice.id} style={{ borderBottom: '1px solid #e5e5e5' }}>
-                <td style={{ padding: '12px' }}>{invoice.invoiceNumber}</td>
-                <td style={{ padding: '12px' }}>{invoice.orderNumber}</td>
-                <td style={{ padding: '12px' }}>{invoice.customerName || '-'}</td>
-                <td style={{ padding: '12px' }}>
-                  {invoice.currency} {invoice.totalAmount}
-                </td>
-                <td style={{ padding: '12px' }}>
-                  {new Date(invoice.createdAt).toLocaleDateString()}
-                </td>
-                <td style={{ padding: '12px' }}>
-                  {invoice.emailSent ? (
-                    <span style={{ color: 'green' }}>✓ Sent</span>
-                  ) : (
-                    <span style={{ color: '#999' }}>Not sent</span>
-                  )}
-                </td>
-                <td style={{ padding: '12px' }}>
-                  <a
-                    href={`/api/invoices/${invoice.id}/download`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      padding: '6px 12px',
-                      backgroundColor: '#5C6AC4',
-                      color: 'white',
-                      borderRadius: '4px',
-                      textDecoration: 'none',
-                      fontSize: '14px',
-                    }}
-                  >
-                    Download PDF
-                  </a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+        </Banner>
 
-      <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
-        <p style={{ fontSize: '14px', color: '#666' }}>
-          <strong>Note:</strong> Invoices are automatically generated when orders are created. 
-          Configure your company information in Settings to customize your invoices.
-        </p>
-      </div>
-    </div>
+        <Card padding="0">
+          {invoices.length === 0 ? (
+            <EmptyState
+              heading="No invoices yet"
+              image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+            >
+              <p>
+                Invoices will be automatically generated when orders are created.
+                Make sure to configure your company settings first.
+              </p>
+              <div style={{ marginTop: '16px' }}>
+                <Button url="/app/settings">Go to Settings</Button>
+              </div>
+            </EmptyState>
+          ) : (
+            <DataTable
+              columnContentTypes={[
+                'text',
+                'text',
+                'text',
+                'text',
+                'text',
+                'text',
+                'text',
+              ]}
+              headings={[
+                'Invoice #',
+                'Order #',
+                'Customer',
+                'Total',
+                'Date',
+                'Email Status',
+                'Actions',
+              ]}
+              rows={rows}
+            />
+          )}
+        </Card>
+      </BlockStack>
+    </Page>
   );
 }

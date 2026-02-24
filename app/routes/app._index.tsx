@@ -6,11 +6,21 @@ import type {
 } from "react-router";
 import { useFetcher, useLoaderData, Link } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import {
+  Page,
+  Card,
+  Button,
+  Text,
+  BlockStack,
+  InlineStack,
+  Banner,
+  Spinner,
+  Badge,
+  Box,
+} from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import db from "../db.server";
-import { WelcomeBanner } from "../components/WelcomeBanner";
-import { OnboardingGuide } from "../components/OnboardingGuide";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -47,152 +57,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const authResult = await authenticate.admin(request);
-  const { session, admin } = authResult;
-  
-  console.log('🔑 Auth result keys:', Object.keys(authResult));
-  console.log('👤 Admin object:', admin ? Object.keys(admin) : 'undefined');
-  
-  const formData = await request.formData();
-  const actionName = formData.get('_action');
-
-  if (actionName === 'createInvoice') {
-    const orderIdInput = formData.get('orderId') as string;
-
-    if (!orderIdInput) {
-      return Response.json({ error: 'Order ID is required' }, { status: 400 });
-    }
-
-    try {
-      let order: any;
-      const orderNumber = orderIdInput.replace('#', '');
-
-      // Get recent orders and search by order_number
-      try {
-        const ordersResponse = await admin.rest.get({
-          path: `orders.json?status=any&limit=50`,
-        });
-
-        if (ordersResponse.body?.orders) {
-          const orders = ordersResponse.body.orders;
-          
-          // DEBUG: Log first 3 orders
-          console.log('📦 Total orders found:', orders.length);
-          console.log('🔍 Searching for:', orderNumber);
-          console.log('📋 Sample orders:', orders.slice(0, 3).map((o: any) => ({
-            id: o.id,
-            order_number: o.order_number,
-            name: o.name,
-          })));
-
-          // Search by order_number field
-          order = orders.find((o: any) => 
-            o.order_number?.toString() === orderNumber ||
-            o.name === `#${orderNumber}` ||
-            o.id?.toString() === orderNumber
-          );
-
-          if (order) {
-            console.log('✅ Order found:', { id: order.id, order_number: order.order_number, name: order.name });
-          } else {
-            console.log('❌ Order not found in list');
-          }
-        }
-      } catch (searchError) {
-        console.error('Order search failed:', searchError);
-      }
-
-      // If not found, try direct ID lookup
-      if (!order && /^\d+$/.test(orderIdInput)) {
-        try {
-          const restResponse = await admin.rest.get({
-            path: `orders/${orderIdInput}.json`,
-          });
-
-          if (restResponse.body?.order) {
-            order = restResponse.body.order;
-          }
-        } catch (idError) {
-          console.error('Order ID lookup failed:', idError);
-        }
-      }
-
-      if (!order) {
-        return Response.json({ 
-          error: `Order not found. Please check the order number. Searched for: ${orderNumber}` 
-        }, { status: 404 });
-      }
-
-      // Check if invoice already exists
-      const existingInvoice = await db.invoice.findFirst({
-        where: {
-          shop: session.shop,
-          orderId: order.id.toString(),
-        },
-      });
-
-      if (existingInvoice) {
-        return Response.json({
-          error: 'Invoice already exists for this order',
-          invoice: existingInvoice,
-        }, { status: 400 });
-      }
-
-      // Generate invoice number
-      const { generateInvoiceNumber } = await import('../utils/pdf-generator');
-      const invoiceNumber = generateInvoiceNumber(order.order_number || order.id.toString());
-
-      // Create invoice
-      const invoice = await db.invoice.create({
-        data: {
-          shop: session.shop,
-          orderId: order.id.toString(),
-          orderNumber: order.order_number?.toString() || order.name,
-          invoiceNumber,
-          customerName: order.customer
-            ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim()
-            : null,
-          customerEmail: order.customer?.email || null,
-          totalAmount: order.total_price,
-          currency: order.currency,
-          emailSent: false,
-        },
-      });
-
-      return Response.json({
-        success: true,
-        invoice,
-        message: 'Invoice created successfully',
-      });
-    } catch (error: any) {
-      console.error('Error creating invoice:', error);
-      return Response.json({ error: error.message || 'Failed to create invoice' }, { status: 500 });
-    }
-  }
-
-  return Response.json({ error: 'Invalid action' }, { status: 400 });
-};
-
 export default function Index() {
   const { invoices, settings, stats } = useLoaderData<typeof loader>();
-  const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
-  const [orderId, setOrderId] = useState('');
-
-  const isLoading = fetcher.state === 'submitting';
-
-  useEffect(() => {
-    if (fetcher.data?.success) {
-      shopify.toast.show('Invoice created successfully');
-      setOrderId('');
-    } else if (fetcher.data?.error) {
-      shopify.toast.show(fetcher.data.error, { isError: true });
-    }
-  }, [fetcher.data, shopify]);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const downloadPDF = async (invoiceId: string, invoiceNumber: string) => {
     try {
+      setDownloadingId(invoiceId);
       shopify.toast.show('Generating PDF...');
       
       const response = await fetch(`/app/invoices/${invoiceId}/download`, {
@@ -227,152 +99,196 @@ export default function Index() {
     } catch (err: any) {
       console.error('Download failed:', err);
       shopify.toast.show(`Failed to download PDF: ${err.message}`, { isError: true });
+    } finally {
+      setDownloadingId(null);
     }
   };
 
   return (
-    <s-page heading="Invoice Generator">
-      <Link to="/app/invoices" slot="primary-action">
-        <s-button>View All Invoices</s-button>
-      </Link>
-      <Link to="/app/settings" slot="secondary-action">
-        <s-button variant="secondary">Settings</s-button>
-      </Link>
+    <Page
+      title="Invoice Generator"
+      primaryAction={{
+        content: 'View All Invoices',
+        url: '/app/invoices',
+      }}
+      secondaryActions={[
+        {
+          content: 'Settings',
+          url: '/app/settings',
+        },
+      ]}
+    >
+      <BlockStack gap="500">
+        {!settings && (
+          <Banner title="Welcome to Invoice Generator!" tone="info">
+            <p>
+              Get started by configuring your company settings. This will ensure your invoices
+              include all necessary business information.
+            </p>
+          </Banner>
+        )}
 
-      {!settings && <WelcomeBanner />}
+        {(!settings || stats.total === 0) && (
+          <Card>
+            <BlockStack gap="400">
+              <Text as="h2" variant="headingMd">
+                Getting Started
+              </Text>
+              <BlockStack gap="200">
+                {!settings && (
+                  <Text as="p">
+                    <Link to="/app/settings" style={{ textDecoration: 'underline' }}>
+                      1. Configure company settings
+                    </Link>
+                  </Text>
+                )}
+                <Text as="p">
+                  {settings ? '1.' : '2.'} Create a test order in your store
+                </Text>
+                <Text as="p">
+                  {settings ? '2.' : '3.'} Invoice will be generated automatically
+                </Text>
+                <Text as="p">
+                  {settings ? '3.' : '4.'} Download and review the PDF
+                </Text>
+              </BlockStack>
+            </BlockStack>
+          </Card>
+        )}
 
-      {(!settings || stats.total === 0) && (
-        <OnboardingGuide hasSettings={!!settings} totalInvoices={stats.total} />
-      )}
-
-      <s-section heading="Dashboard">
-        <s-stack direction="inline" gap="base">
-          <s-box
-            padding="base"
-            borderWidth="base"
-            borderRadius="base"
-            background="subdued"
-            style={{ flex: 1 }}
-          >
-            <s-stack direction="block" gap="tight">
-              <s-heading size="2xl">{stats.total}</s-heading>
-              <s-text>Total Invoices</s-text>
-            </s-stack>
-          </s-box>
-          <s-box
-            padding="base"
-            borderWidth="base"
-            borderRadius="base"
-            background="subdued"
-            style={{ flex: 1 }}
-          >
-            <s-stack direction="block" gap="tight">
-              <s-heading size="2xl">{stats.emailsSent}</s-heading>
-              <s-text>Emails Sent</s-text>
-            </s-stack>
-          </s-box>
-          <s-box
-            padding="base"
-            borderWidth="base"
-            borderRadius="base"
-            background="subdued"
-            style={{ flex: 1 }}
-          >
-            <s-stack direction="block" gap="tight">
-              <s-heading size="2xl">{invoices.length}</s-heading>
-              <s-text>Recent Invoices</s-text>
-            </s-stack>
-          </s-box>
-        </s-stack>
-      </s-section>
-
-      <s-section heading="Automatic Invoice Generation">
-        <s-paragraph>
-          Invoices are automatically generated when orders are created. 
-          To test this feature, create a test order in your store and the invoice will be generated automatically.
-        </s-paragraph>
-        <s-banner tone="info">
-          Manual invoice creation requires additional API permissions. 
-          For now, invoices are created automatically via webhook when orders are placed.
-        </s-banner>
-      </s-section>
-
-      <s-section heading="Recent Invoices">
-        {invoices.length === 0 ? (
-          <s-paragraph>
-            No invoices yet. Create your first invoice using the form above or
-            wait for an order to be placed.
-          </s-paragraph>
-        ) : (
-          <s-stack direction="block" gap="base">
-            {invoices.map((invoice) => (
-              <s-box
-                key={invoice.id}
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
+        <Card>
+          <BlockStack gap="400">
+            <Text as="h2" variant="headingMd">
+              Dashboard
+            </Text>
+            <InlineStack gap="400">
+              <Box
+                padding="400"
+                background="bg-surface-secondary"
+                borderRadius="200"
+                minWidth="200px"
               >
-                <s-stack direction="inline" gap="base" alignment="space-between">
-                  <s-stack direction="block" gap="tight">
-                    <s-heading size="sm">{invoice.invoiceNumber}</s-heading>
-                    <s-text>
-                      Order #{invoice.orderNumber} • {invoice.customerName || 'No customer'} •{' '}
-                      {invoice.currency} {invoice.totalAmount}
-                    </s-text>
-                    <s-text size="sm" tone="subdued">
-                      {new Date(invoice.createdAt).toLocaleDateString()}
-                    </s-text>
-                  </s-stack>
-                  <s-stack direction="inline" gap="tight">
-                    {invoice.emailSent && (
-                      <s-badge tone="success">Email Sent</s-badge>
-                    )}
-                    <s-button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => downloadPDF(invoice.id, invoice.invoiceNumber)}
-                    >
-                      Download PDF
-                    </s-button>
-                  </s-stack>
-                </s-stack>
-              </s-box>
-            ))}
-          </s-stack>
-        )}
-        {invoices.length > 0 && (
-          <Link to="/app/invoices">
-            <s-button variant="tertiary">View All Invoices →</s-button>
-          </Link>
-        )}
-      </s-section>
+                <BlockStack gap="200">
+                  <Text as="h3" variant="heading2xl">
+                    {stats.total}
+                  </Text>
+                  <Text as="p" tone="subdued">
+                    Total Invoices
+                  </Text>
+                </BlockStack>
+              </Box>
+              <Box
+                padding="400"
+                background="bg-surface-secondary"
+                borderRadius="200"
+                minWidth="200px"
+              >
+                <BlockStack gap="200">
+                  <Text as="h3" variant="heading2xl">
+                    {stats.emailsSent}
+                  </Text>
+                  <Text as="p" tone="subdued">
+                    Emails Sent
+                  </Text>
+                </BlockStack>
+              </Box>
+              <Box
+                padding="400"
+                background="bg-surface-secondary"
+                borderRadius="200"
+                minWidth="200px"
+              >
+                <BlockStack gap="200">
+                  <Text as="h3" variant="heading2xl">
+                    {invoices.length}
+                  </Text>
+                  <Text as="p" tone="subdued">
+                    Recent Invoices
+                  </Text>
+                </BlockStack>
+              </Box>
+            </InlineStack>
+          </BlockStack>
+        </Card>
 
-      <s-section slot="aside" heading="Getting Started">
-        <s-unordered-list>
-          <s-list-item>
-            <Link to="/app/settings">
-              Configure company settings
-            </Link>
-          </s-list-item>
-          <s-list-item>
-            Create a test invoice using the form above
-          </s-list-item>
-          <s-list-item>
-            Download and review the PDF invoice
-          </s-list-item>
-          <s-list-item>
-            Invoices will be automatically generated for new orders
-          </s-list-item>
-        </s-unordered-list>
-      </s-section>
+        <Card>
+          <BlockStack gap="400">
+            <Text as="h2" variant="headingMd">
+              Automatic Invoice Generation
+            </Text>
+            <Text as="p">
+              Invoices are automatically generated when orders are created.
+              To test this feature, create a test order in your store and the invoice will be
+              generated automatically.
+            </Text>
+            <Banner tone="info">
+              Manual invoice creation requires additional API permissions.
+              For now, invoices are created automatically via webhook when orders are placed.
+            </Banner>
+          </BlockStack>
+        </Card>
 
-      <s-section slot="aside" heading="About">
-        <s-paragraph>
-          This app automatically generates PDF invoices for your Shopify orders.
-          Customize your company information, invoice templates, and email settings.
-        </s-paragraph>
-      </s-section>
-    </s-page>
+        <Card>
+          <BlockStack gap="400">
+            <Text as="h2" variant="headingMd">
+              Recent Invoices
+            </Text>
+            {invoices.length === 0 ? (
+              <Text as="p" tone="subdued">
+                No invoices yet. Create a test order in your store to generate your first invoice.
+              </Text>
+            ) : (
+              <BlockStack gap="300">
+                {invoices.map((invoice) => (
+                  <Box
+                    key={invoice.id}
+                    padding="400"
+                    borderWidth="025"
+                    borderColor="border"
+                    borderRadius="200"
+                  >
+                    <InlineStack align="space-between" blockAlign="center">
+                      <BlockStack gap="200">
+                        <Text as="h3" variant="headingSm">
+                          {invoice.invoiceNumber}
+                        </Text>
+                        <Text as="p">
+                          Order #{invoice.orderNumber} • {invoice.customerName || 'No customer'} •{' '}
+                          {invoice.currency} {invoice.totalAmount}
+                        </Text>
+                        <Text as="p" tone="subdued" variant="bodySm">
+                          {new Date(invoice.createdAt).toLocaleDateString()}
+                        </Text>
+                      </BlockStack>
+                      <InlineStack gap="200" align="end">
+                        {invoice.emailSent && (
+                          <Badge tone="success">Email Sent</Badge>
+                        )}
+                        <Button
+                          variant="secondary"
+                          size="slim"
+                          onClick={() => downloadPDF(invoice.id, invoice.invoiceNumber)}
+                          loading={downloadingId === invoice.id}
+                        >
+                          {downloadingId === invoice.id ? 'Generating...' : 'Download PDF'}
+                        </Button>
+                      </InlineStack>
+                    </InlineStack>
+                  </Box>
+                ))}
+              </BlockStack>
+            )}
+            {invoices.length > 0 && (
+              <Box paddingBlockStart="300">
+                <Link to="/app/invoices">
+                  <Button variant="plain">View All Invoices →</Button>
+                </Link>
+              </Box>
+            )}
+          </BlockStack>
+        </Card>
+      </BlockStack>
+    </Page>
   );
 }
 

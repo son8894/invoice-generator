@@ -1,6 +1,17 @@
-import { redirect } from 'react-router';
+import { useEffect } from 'react';
 import type { LoaderFunctionArgs, ActionFunctionArgs } from '@react-router/node';
 import { useLoaderData, Form, useActionData, useNavigation } from 'react-router';
+import { useAppBridge } from '@shopify/app-bridge-react';
+import {
+  Page,
+  Card,
+  FormLayout,
+  TextField,
+  Select,
+  Button,
+  Banner,
+  BlockStack,
+} from '@shopify/polaris';
 import { authenticate } from '../shopify.server';
 import db from '../db.server';
 
@@ -31,13 +42,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const data = {
       companyName: companyName.trim(),
-      address: formData.get('address') as string,
-      city: formData.get('city') as string,
-      postalCode: formData.get('postalCode') as string,
-      country: formData.get('country') as string,
-      taxId: formData.get('taxId') as string,
-      email: formData.get('email') as string,
-      phone: formData.get('phone') as string,
+      address: formData.get('address') as string || '',
+      city: formData.get('city') as string || '',
+      postalCode: formData.get('postalCode') as string || '',
+      country: formData.get('country') as string || '',
+      taxId: formData.get('taxId') as string || '',
+      email: formData.get('email') as string || '',
+      phone: formData.get('phone') as string || '',
       locale: formData.get('locale') as string || 'en',
     };
 
@@ -64,233 +75,117 @@ export default function Settings() {
   const { settings } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
+  const shopify = useAppBridge();
   const isSubmitting = navigation.state === 'submitting';
 
+  useEffect(() => {
+    if (actionData?.success) {
+      shopify.toast.show(actionData.message);
+    } else if (actionData?.error) {
+      shopify.toast.show(actionData.error, { isError: true });
+    }
+  }, [actionData, shopify]);
+
+  const localeOptions = [
+    { label: 'English', value: 'en' },
+    { label: '한국어 (Korean)', value: 'ko' },
+    { label: '日本語 (Japanese)', value: 'ja' },
+  ];
+
   return (
-    <div style={{ padding: '20px', maxWidth: '800px' }}>
-      <div style={{ marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>Company Settings</h1>
-        <p style={{ color: '#666' }}>
-          Configure your company information to appear on invoices.
-        </p>
-      </div>
+    <Page
+      title="Company Settings"
+      subtitle="Configure your company information to appear on invoices"
+      backAction={{ url: '/app' }}
+    >
+      <BlockStack gap="500">
+        {actionData?.error && (
+          <Banner title="Error" tone="critical">
+            <p>{actionData.error}</p>
+          </Banner>
+        )}
 
-      {actionData?.success && (
-        <s-banner status="success">
-          <s-paragraph>{actionData.message}</s-paragraph>
-        </s-banner>
-      )}
+        <Form method="post">
+          <Card>
+            <BlockStack gap="400">
+              <FormLayout>
+                <TextField
+                  label="Company Name"
+                  name="companyName"
+                  autoComplete="organization"
+                  defaultValue={settings?.companyName || ''}
+                  requiredIndicator
+                />
 
-      {actionData?.error && (
-        <s-banner status="critical">
-          <s-paragraph>{actionData.error}</s-paragraph>
-        </s-banner>
-      )}
+                <TextField
+                  label="Address"
+                  name="address"
+                  autoComplete="street-address"
+                  defaultValue={settings?.address || ''}
+                />
 
-      <Form method="post">
-        <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-              Company Name *
-            </label>
-            <input
-              type="text"
-              name="companyName"
-              defaultValue={settings?.companyName || ''}
-              required
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '14px',
-              }}
-            />
-          </div>
+                <FormLayout.Group>
+                  <TextField
+                    label="City"
+                    name="city"
+                    autoComplete="address-level2"
+                    defaultValue={settings?.city || ''}
+                  />
+                  <TextField
+                    label="Postal Code"
+                    name="postalCode"
+                    autoComplete="postal-code"
+                    defaultValue={settings?.postalCode || ''}
+                  />
+                </FormLayout.Group>
 
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-              Address
-            </label>
-            <input
-              type="text"
-              name="address"
-              defaultValue={settings?.address || ''}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '14px',
-              }}
-            />
-          </div>
+                <TextField
+                  label="Country"
+                  name="country"
+                  autoComplete="country"
+                  defaultValue={settings?.country || ''}
+                />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-                City
-              </label>
-              <input
-                type="text"
-                name="city"
-                defaultValue={settings?.city || ''}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-                Postal Code
-              </label>
-              <input
-                type="text"
-                name="postalCode"
-                defaultValue={settings?.postalCode || ''}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                }}
-              />
-            </div>
-          </div>
+                <TextField
+                  label="Tax ID / Business Number"
+                  name="taxId"
+                  defaultValue={settings?.taxId || ''}
+                  helpText="Your business registration number or tax ID"
+                />
 
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-              Country
-            </label>
-            <input
-              type="text"
-              name="country"
-              defaultValue={settings?.country || ''}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '14px',
-              }}
-            />
-          </div>
+                <FormLayout.Group>
+                  <TextField
+                    label="Email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    defaultValue={settings?.email || ''}
+                  />
+                  <TextField
+                    label="Phone"
+                    name="phone"
+                    type="tel"
+                    autoComplete="tel"
+                    defaultValue={settings?.phone || ''}
+                  />
+                </FormLayout.Group>
 
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-              Tax ID / Business Number
-            </label>
-            <input
-              type="text"
-              name="taxId"
-              defaultValue={settings?.taxId || ''}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '14px',
-              }}
-            />
-          </div>
+                <Select
+                  label="Invoice Language"
+                  name="locale"
+                  options={localeOptions}
+                  value={settings?.locale || 'en'}
+                  helpText="Select the language for your invoice PDFs"
+                />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                defaultValue={settings?.email || ''}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-                Phone
-              </label>
-              <input
-                type="tel"
-                name="phone"
-                defaultValue={settings?.phone || ''}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                }}
-              />
-            </div>
-          </div>
-
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-              Invoice Language
-            </label>
-            <select
-              name="locale"
-              defaultValue={settings?.locale || 'en'}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '14px',
-              }}
-            >
-              <option value="en">English</option>
-              <option value="ko">한국어 (Korean)</option>
-              <option value="ja">日本語 (Japanese)</option>
-            </select>
-            <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-              Select the language for your invoice PDFs
-            </p>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: isSubmitting ? '#999' : '#5C6AC4',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              fontSize: '16px',
-              fontWeight: '500',
-              cursor: isSubmitting ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {isSubmitting ? 'Saving...' : 'Save Settings'}
-          </button>
-        </div>
-      </Form>
-
-      <div style={{ marginTop: '20px' }}>
-        <a
-          href="/app/invoices"
-          style={{
-            color: '#5C6AC4',
-            textDecoration: 'none',
-            fontSize: '14px',
-          }}
-        >
-          ← Back to Invoices
-        </a>
-      </div>
-    </div>
+                <Button submit variant="primary" loading={isSubmitting}>
+                  Save Settings
+                </Button>
+              </FormLayout>
+            </BlockStack>
+          </Card>
+        </Form>
+      </BlockStack>
+    </Page>
   );
 }

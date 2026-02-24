@@ -1,11 +1,11 @@
 import { type LoaderFunctionArgs } from '@react-router/node';
 import { authenticate } from '../shopify.server';
 import db from '../db.server';
-import { generateLocalizedInvoicePDF, detectLocale, type Locale } from '../utils/pdf-generator-i18n';
+import { generateProfessionalInvoicePDF, detectLocale, type Locale } from '../utils/pdf-generator-pro';
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   try {
-    const { session } = await authenticate.admin(request);
+    const { session, admin } = await authenticate.admin(request);
     const { id } = params;
 
     if (!id) {
@@ -29,23 +29,45 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       where: { shop: session.shop },
     });
 
-    // Parse items
-    const items = [
-      {
-        title: 'Order Items',
+    // Use data from database (populated by webhook or manual entry)
+    let items = [];
+    let subtotal = invoice.subtotal || invoice.totalAmount || '0.00';
+    let tax = invoice.taxAmount || undefined;
+    let taxRate = invoice.taxRate ? parseFloat(invoice.taxRate) : undefined;
+    let shipping = invoice.shippingAmount || undefined;
+    let total = invoice.totalAmount || '0.00';
+    let customerAddress = invoice.customerAddress || undefined;
+
+    // Parse line items from JSON
+    if (invoice.lineItems) {
+      try {
+        items = JSON.parse(invoice.lineItems);
+      } catch (error) {
+        console.error('Failed to parse line items:', error);
+        items = [{
+          title: `Order #${invoice.orderNumber}`,
+          quantity: 1,
+          price: total,
+          total,
+        }];
+      }
+    } else {
+      // Fallback if no line items
+      items = [{
+        title: `Order #${invoice.orderNumber}`,
         quantity: 1,
-        price: invoice.totalAmount || '0.00',
-        total: invoice.totalAmount || '0.00',
-      },
-    ];
+        price: total,
+        total,
+      }];
+    }
 
     // Get locale
     const url = new URL(request.url);
     const localeParam = url.searchParams.get('locale') as Locale | null;
     const locale = localeParam || (companySettings?.locale as Locale) || detectLocale(session.shop);
 
-    // Generate PDF
-    const pdfBuffer = await generateLocalizedInvoicePDF({
+    // Generate professional PDF
+    const pdfBuffer = await generateProfessionalInvoicePDF({
       invoiceNumber: invoice.invoiceNumber,
       orderNumber: invoice.orderNumber,
       date: new Date(invoice.createdAt).toLocaleDateString('en-US', {
@@ -55,9 +77,13 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       }),
       customerName: invoice.customerName || undefined,
       customerEmail: invoice.customerEmail || undefined,
+      customerAddress: customerAddress,
       items,
-      subtotal: invoice.totalAmount || '0.00',
-      total: invoice.totalAmount || '0.00',
+      subtotal,
+      tax,
+      taxRate,
+      shipping,
+      total,
       currency: invoice.currency || 'USD',
       company: {
         name: companySettings?.companyName || 'Your Company',
@@ -68,7 +94,9 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
         taxId: companySettings?.taxId || undefined,
         email: companySettings?.email || undefined,
         phone: companySettings?.phone || undefined,
+        logoPath: companySettings?.logoUrl || undefined,
       },
+      paymentTerms: companySettings?.paymentTerms || undefined,
     }, locale);
 
     // Return PDF
