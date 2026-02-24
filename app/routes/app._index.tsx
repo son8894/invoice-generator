@@ -63,20 +63,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       let order: any;
       const orderNumber = orderIdInput.replace('#', '');
 
-      // Search orders by name using REST API (no Protected Customer Data needed)
+      // Get recent orders and search by order_number
       try {
         const ordersResponse = await admin.rest.get({
-          path: `orders.json?name=${orderNumber}&limit=1`,
+          path: `orders.json?status=any&limit=50`,
         });
 
-        if (ordersResponse.body?.orders?.length > 0) {
-          order = ordersResponse.body.orders[0];
+        if (ordersResponse.body?.orders) {
+          // Search by order_number field
+          order = ordersResponse.body.orders.find((o: any) => 
+            o.order_number?.toString() === orderNumber ||
+            o.name === `#${orderNumber}` ||
+            o.id?.toString() === orderNumber
+          );
         }
       } catch (searchError) {
         console.error('Order search failed:', searchError);
       }
 
-      // If not found by name, try direct ID lookup
+      // If not found, try direct ID lookup
       if (!order && /^\d+$/.test(orderIdInput)) {
         try {
           const restResponse = await admin.rest.get({
