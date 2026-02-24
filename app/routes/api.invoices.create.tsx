@@ -17,22 +17,77 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return Response.json({ error: 'Order ID is required' }, { status: 400 });
   }
 
-  // Validate order ID format (numeric)
-  if (!/^\d+$/.test(orderIdInput)) {
-    return Response.json({ error: 'Invalid order ID format. Please enter a numeric order ID.' }, { status: 400 });
-  }
-
   try {
-    // Fetch order from Shopify
-    const response = await admin.rest.get({
-      path: `orders/${orderIdInput}`,
+    let order: any;
+
+    // Try to fetch by Order Number first (e.g., #1008 or 1008)
+    const orderNumber = orderIdInput.replace('#', '');
+    
+    // Search by order name (GraphQL)
+    const graphqlQuery = `
+      query getOrderByName($query: String!) {
+        orders(first: 1, query: $query) {
+          edges {
+            node {
+              id
+              legacyResourceId
+              name
+              totalPriceSet {
+                shopMoney {
+                  amount
+                  currencyCode
+                }
+              }
+              customer {
+                firstName
+                lastName
+                email
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const graphqlResponse = await admin.graphql(graphqlQuery, {
+      variables: {
+        query: `name:#${orderNumber}`,
+      },
     });
 
-    if (!response.body || !response.body.order) {
-      return Response.json({ error: 'Order not found. Please check the order ID.' }, { status: 404 });
+    const graphqlData = await graphqlResponse.json();
+
+    if (graphqlData?.data?.orders?.edges?.length > 0) {
+      // Found order by number
+      const gqlOrder = graphqlData.data.orders.edges[0].node;
+      const legacyId = gqlOrder.legacyResourceId;
+
+      // Fetch full order details via REST API
+      const restResponse = await admin.rest.get({
+        path: `orders/${legacyId}`,
+      });
+
+      if (restResponse.body?.order) {
+        order = restResponse.body.order;
+      }
+    } else {
+      // Try direct ID lookup (if user provided internal ID)
+      if (/^\d+$/.test(orderIdInput)) {
+        const restResponse = await admin.rest.get({
+          path: `orders/${orderIdInput}`,
+        });
+
+        if (restResponse.body?.order) {
+          order = restResponse.body.order;
+        }
+      }
     }
 
-    const order = response.body.order as any;
+    if (!order) {
+      return Response.json({ 
+        error: 'Order not found. Please enter a valid order number (e.g., 1008) or order ID.' 
+      }, { status: 404 });
+    }
 
     // Check if invoice already exists
     const existingInvoice = await db.invoice.findFirst({
