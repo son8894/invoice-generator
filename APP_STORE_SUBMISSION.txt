@@ -1,0 +1,92 @@
+=== APP NAME ===
+InvoiceGen ‑ B2B PDF Invoice
+
+=== TAGLINE ===
+Professional PDF invoices with multi-language support for B2B merchants
+
+=== DESCRIPTION ===
+Transform Your Order Confirmations into Professional Invoices
+
+InvoiceGen automatically generates beautiful, professional PDF invoices for your Shopify orders. Perfect for B2B merchants, wholesale stores, and businesses that need formal documentation.
+
+Key Features:
+
+🚀 Automatic Invoice Generation
+• Invoices generated automatically when orders are created
+• No manual work required
+• Seamless integration with your Shopify store
+
+🎨 Professional PDF Design
+• Clean, modern invoice templates
+• Customizable company information
+• Your logo, address, and tax ID on every invoice
+• Color-coded headers and organized line items
+
+🌍 Language Support
+• English (fully supported)
+• Korean (한국어) and Japanese (日本語) support included
+• Automatic currency conversion
+• Localized invoice templates
+
+💼 B2B Ready
+• Tax ID / Business number display
+• Detailed line items with quantity, price, and totals
+• VAT/Tax calculations (10% default, customizable)
+• Shipping costs included
+• Payment terms (Net 30 default)
+
+📧 Easy Management
+• Dashboard with invoice statistics
+• Download PDFs instantly
+• Track sent invoices
+• Search and filter by order number
+
+⚙️ Simple Setup
+1. Install the app
+2. Configure your company settings
+3. Done! Invoices are generated automatically
+
+Perfect For:
+• Wholesale merchants
+• B2B stores
+• International sellers
+• Businesses requiring formal invoices
+• Korean and Japanese market expansion
+
+Why Choose InvoiceGen?
+
+🎯 Simplicity First
+Unlike complex invoice apps with 50+ settings, InvoiceGen focuses on what matters: generating professional invoices quickly and reliably.
+
+💰 Transparent Pricing
+• Free Plan: Up to 50 invoices per month (perfect for testing)
+• Pro Plan ($29/month): Unlimited invoices + email delivery
+
+🌏 Global Ready
+We built this for the Asia-Pacific market. Korean and Japanese support is native, not an afterthought.
+
+🚀 Fast & Reliable
+No slow loading times. No complex configurations. Just fast, beautiful invoices.
+
+=== CATEGORY ===
+Orders and shipping
+
+=== KEYWORDS ===
+invoice, pdf, b2b, korean, japanese, multilingual, wholesale, tax, receipt, billing
+
+=== SUPPORT EMAIL ===
+support@testcompany.kr
+
+=== PRIVACY POLICY URL ===
+https://invoice-generator-r60s.onrender.com/privacy
+
+=== SCREENSHOT FILES (5장) ===
+C:\Users\82102\.openclaw\workspace\invoice-generator\screenshots\1-dashboard.jpg
+C:\Users\82102\.openclaw\workspace\invoice-generator\screenshots\2-settings-complete.jpg
+C:\Users\82102\.openclaw\workspace\invoice-generator\screenshots\3-invoices-list.jpg
+C:\Users\82102\.openclaw\workspace\invoice-generator\screenshots\4-order-picker-modal.jpg
+C:\Users\82102\.openclaw\workspace\invoice-generator\screenshots\5-pdf-korean.jpg
+
+=== PRICING (심사 후 추가 예정) ===
+현재: No pricing (Free app)
+심사 통과 후 Billing API 추가 예정
