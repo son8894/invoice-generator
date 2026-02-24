@@ -2,7 +2,7 @@
 
 client_id = "e0fc18ec6f715444e2ebf252b0f1982f"
 name = "ctrl+ainvoice-generator"
-application_url = "https://example.com"
+application_url = "https://invoice-generator-r60s.onrender.com"
 embedded = true
 
 [build]
@@ -25,4 +25,8 @@ api_version = "2026-04"
 scopes = "read_orders,write_orders"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ 
+  "https://invoice-generator-r60s.onrender.com/auth/callback",
+  "https://invoice-generator-r60s.onrender.com/auth/shopify/callback",
+  "https://invoice-generator-r60s.onrender.com/api/auth/callback"
+]
