@@ -70,12 +70,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         });
 
         if (ordersResponse.body?.orders) {
+          const orders = ordersResponse.body.orders;
+          
+          // DEBUG: Log first 3 orders
+          console.log('📦 Total orders found:', orders.length);
+          console.log('🔍 Searching for:', orderNumber);
+          console.log('📋 Sample orders:', orders.slice(0, 3).map((o: any) => ({
+            id: o.id,
+            order_number: o.order_number,
+            name: o.name,
+          })));
+
           // Search by order_number field
-          order = ordersResponse.body.orders.find((o: any) => 
+          order = orders.find((o: any) => 
             o.order_number?.toString() === orderNumber ||
             o.name === `#${orderNumber}` ||
             o.id?.toString() === orderNumber
           );
+
+          if (order) {
+            console.log('✅ Order found:', { id: order.id, order_number: order.order_number, name: order.name });
+          } else {
+            console.log('❌ Order not found in list');
+          }
         }
       } catch (searchError) {
         console.error('Order search failed:', searchError);
