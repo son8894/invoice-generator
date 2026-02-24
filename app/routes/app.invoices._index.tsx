@@ -1,4 +1,5 @@
-import { json, type LoaderFunctionArgs } from '@react-router/node';
+import { json } from 'react-router';
+import type { LoaderFunctionArgs } from '@react-router/node';
 import { useLoaderData, Link } from 'react-router';
 import { authenticate } from '../shopify.server';
 import db from '../db.server';

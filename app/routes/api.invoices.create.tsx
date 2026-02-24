@@ -1,4 +1,5 @@
-import { json, type ActionFunctionArgs } from '@react-router/node';
+import { json } from 'react-router';
+import type { ActionFunctionArgs } from '@react-router/node';
 import { authenticate } from '../shopify.server';
 import db from '../db.server';
 import { generateInvoiceNumber } from '../utils/pdf-generator';
