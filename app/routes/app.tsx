@@ -1,8 +1,8 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet, useLoaderData, useRouteError, useLocation } from "react-router";
+import { Outlet, useLoaderData, useRouteError, useNavigate, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
-import { AppProvider, Frame, Navigation } from "@shopify/polaris";
+import { AppProvider } from "@shopify/polaris";
 import "@shopify/polaris/build/esm/styles.css";
 
 import { authenticate } from "../shopify.server";
@@ -16,36 +16,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
-  const location = useLocation();
-
-  const navigationMarkup = (
-    <Navigation location={location.pathname}>
-      <Navigation.Section
-        items={[
-          {
-            url: '/app',
-            label: 'Dashboard',
-            exactMatch: true,
-          },
-          {
-            url: '/app/invoices',
-            label: 'Invoices',
-          },
-          {
-            url: '/app/settings',
-            label: 'Settings',
-          },
-        ]}
-      />
-    </Navigation>
-  );
 
   return (
     <ShopifyAppProvider embedded apiKey={apiKey}>
       <AppProvider i18n={{}}>
-        <Frame navigation={navigationMarkup}>
-          <Outlet />
-        </Frame>
+        <Outlet />
       </AppProvider>
     </ShopifyAppProvider>
   );

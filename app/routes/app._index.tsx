@@ -4,7 +4,7 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { useFetcher, useLoaderData, Link } from "react-router";
+import { useFetcher, useLoaderData, Link, useNavigate } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import {
   Page,
@@ -62,6 +62,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function Index() {
   const { invoices, settings, stats } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
+  const navigate = useNavigate();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [selectedInvoices, setSelectedInvoices] = useState<Set<string>>(new Set());
   const [searchValue, setSearchValue] = useState('');
@@ -69,23 +70,24 @@ export default function Index() {
   // Order Resource Picker
   const openOrderPicker = async () => {
     try {
-      const selection = await shopify.resourcePicker({
+      const selected = await shopify.resourcePicker({
         type: 'order',
         multiple: 10,
-        action: 'select',
       });
 
-      if (selection && selection.length > 0) {
-        shopify.toast.show(`Selected ${selection.length} orders. Creating invoices...`);
+      if (selected && selected.length > 0) {
+        shopify.toast.show(`Selected ${selected.length} orders. Creating invoices...`);
+        console.log('Selected orders:', selected);
         
         // TODO: Call API to create invoices for selected orders
         // For now, just show success message
         setTimeout(() => {
-          shopify.toast.show(`Created ${selection.length} invoices!`);
-        }, 1000);
+          shopify.toast.show(`Feature coming soon! Selected ${selected.length} orders.`);
+        }, 500);
       }
     } catch (error) {
       console.error('Order picker error:', error);
+      shopify.toast.show('Failed to open order picker', { isError: true });
     }
   };
 
@@ -188,11 +190,11 @@ export default function Index() {
       secondaryActions={[
         {
           content: 'View All Invoices',
-          url: '/app/invoices',
+          onAction: () => navigate('/app/invoices'),
         },
         {
           content: 'Settings',
-          url: '/app/settings',
+          onAction: () => navigate('/app/settings'),
         },
       ]}
     >

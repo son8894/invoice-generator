@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { LoaderFunctionArgs, ActionFunctionArgs } from '@react-router/node';
-import { useLoaderData, Form, useActionData, useNavigation } from 'react-router';
+import { useLoaderData, Form, useActionData, useNavigation, useNavigate } from 'react-router';
 import { useAppBridge } from '@shopify/app-bridge-react';
 import {
   Page,
@@ -76,6 +76,7 @@ export default function Settings() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const shopify = useAppBridge();
+  const navigate = useNavigate();
   const isSubmitting = navigation.state === 'submitting';
 
   useEffect(() => {
@@ -96,7 +97,7 @@ export default function Settings() {
     <Page
       title="Company Settings"
       subtitle="Configure your company information to appear on invoices"
-      backAction={{ url: '/app' }}
+      backAction={{ onAction: () => navigate('/app') }}
     >
       <BlockStack gap="500">
         {actionData?.error && (

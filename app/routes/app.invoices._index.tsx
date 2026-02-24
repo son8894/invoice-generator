@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { LoaderFunctionArgs } from '@react-router/node';
-import { useLoaderData } from 'react-router';
+import { useLoaderData, useNavigate } from 'react-router';
 import { useAppBridge } from '@shopify/app-bridge-react';
 import {
   Page,
@@ -33,6 +33,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function InvoicesIndex() {
   const { invoices } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
+  const navigate = useNavigate();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [selectedInvoices, setSelectedInvoices] = useState<Set<string>>(new Set());
   const [searchValue, setSearchValue] = useState('');
@@ -41,22 +42,23 @@ export default function InvoicesIndex() {
   // Order Resource Picker
   const openOrderPicker = async () => {
     try {
-      const selection = await shopify.resourcePicker({
+      const selected = await shopify.resourcePicker({
         type: 'order',
         multiple: 10,
-        action: 'select',
       });
 
-      if (selection && selection.length > 0) {
-        shopify.toast.show(`Selected ${selection.length} orders. Creating invoices...`);
+      if (selected && selected.length > 0) {
+        shopify.toast.show(`Selected ${selected.length} orders. Creating invoices...`);
+        console.log('Selected orders:', selected);
         
         // TODO: Call API to create invoices for selected orders
         setTimeout(() => {
-          shopify.toast.show(`Created ${selection.length} invoices!`);
-        }, 1000);
+          shopify.toast.show(`Feature coming soon! Selected ${selected.length} orders.`);
+        }, 500);
       }
     } catch (error) {
       console.error('Order picker error:', error);
+      shopify.toast.show('Failed to open order picker', { isError: true });
     }
   };
 
@@ -166,10 +168,10 @@ export default function InvoicesIndex() {
       secondaryActions={[
         {
           content: 'Settings',
-          url: '/app/settings',
+          onAction: () => navigate('/app/settings'),
         },
       ]}
-      backAction={{ url: '/app' }}
+      backAction={{ onAction: () => navigate('/app') }}
     >
       <BlockStack gap="500">
         <Banner tone="info">
