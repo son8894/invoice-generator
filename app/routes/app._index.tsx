@@ -48,7 +48,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, admin } = await authenticate.admin(request);
+  const authResult = await authenticate.admin(request);
+  const { session, admin } = authResult;
+  
+  console.log('🔑 Auth result keys:', Object.keys(authResult));
+  console.log('👤 Admin object:', admin ? Object.keys(admin) : 'undefined');
+  
   const formData = await request.formData();
   const actionName = formData.get('_action');
 
@@ -242,31 +247,15 @@ export default function Index() {
         </s-stack>
       </s-section>
 
-      <s-section heading="Create Invoice Manually">
+      <s-section heading="Automatic Invoice Generation">
         <s-paragraph>
-          Enter an order ID to manually generate an invoice. Normally, invoices
-          are automatically generated when orders are created.
+          Invoices are automatically generated when orders are created. 
+          To test this feature, create a test order in your store and the invoice will be generated automatically.
         </s-paragraph>
-        <fetcher.Form method="post">
-          <input type="hidden" name="_action" value="createInvoice" />
-          <s-stack direction="inline" gap="base">
-            <s-text-field
-              label="Order ID"
-              name="orderId"
-              value={orderId}
-              onChange={(e: any) => setOrderId(e.target.value)}
-              placeholder="e.g., 1234567890"
-              style={{ flex: 1 }}
-            />
-            <s-button
-              type="submit"
-              {...(isLoading ? { loading: true } : {})}
-              disabled={!orderId || isLoading}
-            >
-              Generate Invoice
-            </s-button>
-          </s-stack>
-        </fetcher.Form>
+        <s-banner tone="info">
+          Manual invoice creation requires additional API permissions. 
+          For now, invoices are created automatically via webhook when orders are placed.
+        </s-banner>
       </s-section>
 
       <s-section heading="Recent Invoices">
