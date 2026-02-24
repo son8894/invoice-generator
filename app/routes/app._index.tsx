@@ -4,7 +4,6 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { json } from "react-router";
 import { useFetcher, useLoaderData, Link } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -38,14 +37,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
   });
 
-  return json({
+  return {
     invoices,
     settings,
     stats: {
       total: totalInvoices,
       emailsSent,
     },
-  });
+  };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -57,7 +56,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const orderIdInput = formData.get('orderId') as string;
 
     if (!orderIdInput) {
-      return json({ error: 'Order ID is required' }, { status: 400 });
+      return Response.json({ error: 'Order ID is required' }, { status: 400 });
     }
 
     try {
@@ -72,13 +71,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
 
       const result = await createResponse.json();
-      return json(result, { status: createResponse.status });
+      return Response.json(result, { status: createResponse.status });
     } catch (error: any) {
-      return json({ error: error.message }, { status: 500 });
+      return Response.json({ error: error.message }, { status: 500 });
     }
   }
 
-  return json({ error: 'Invalid action' }, { status: 400 });
+  return Response.json({ error: 'Invalid action' }, { status: 400 });
 };
 
 export default function Index() {

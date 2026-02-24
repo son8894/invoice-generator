@@ -1,4 +1,3 @@
-import { json } from 'react-router';
 import type { LoaderFunctionArgs } from '@react-router/node';
 import { useLoaderData, Link } from 'react-router';
 import { authenticate } from '../shopify.server';
@@ -13,7 +12,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     take: 50,
   });
 
-  return json({ invoices });
+  return { invoices };
 };
 
 export default function InvoicesIndex() {

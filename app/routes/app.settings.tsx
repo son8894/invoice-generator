@@ -1,4 +1,4 @@
-import { json, redirect } from 'react-router';
+import { redirect } from 'react-router';
 import type { LoaderFunctionArgs, ActionFunctionArgs } from '@react-router/node';
 import { useLoaderData, Form, useActionData, useNavigation } from 'react-router';
 import { authenticate } from '../shopify.server';
@@ -11,7 +11,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     where: { shop: session.shop },
   });
 
-  return json({ settings, shop: session.shop });
+  return { settings, shop: session.shop };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -23,7 +23,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // Validation
     if (!companyName || companyName.trim() === '') {
-      return json({ 
+      return Response.json({ 
         success: false, 
         error: 'Company name is required' 
       }, { status: 400 });
@@ -50,10 +50,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       update: data,
     });
 
-    return json({ success: true, message: 'Settings saved successfully!' });
+    return { success: true, message: 'Settings saved successfully!' };
   } catch (error: any) {
     console.error('Error saving settings:', error);
-    return json({ 
+    return Response.json({ 
       success: false, 
       error: `Failed to save settings: ${error.message}` 
     }, { status: 500 });

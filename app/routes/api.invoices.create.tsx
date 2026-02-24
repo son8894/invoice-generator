@@ -1,4 +1,3 @@
-import { json } from 'react-router';
 import type { ActionFunctionArgs } from '@react-router/node';
 import { authenticate } from '../shopify.server';
 import db from '../db.server';
@@ -8,19 +7,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
 
   if (request.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, { status: 405 });
+    return Response.json({ error: 'Method not allowed' }, { status: 405 });
   }
 
   const formData = await request.formData();
   const orderIdInput = formData.get('orderId') as string;
 
   if (!orderIdInput) {
-    return json({ error: 'Order ID is required' }, { status: 400 });
+    return Response.json({ error: 'Order ID is required' }, { status: 400 });
   }
 
   // Validate order ID format (numeric)
   if (!/^\d+$/.test(orderIdInput)) {
-    return json({ error: 'Invalid order ID format. Please enter a numeric order ID.' }, { status: 400 });
+    return Response.json({ error: 'Invalid order ID format. Please enter a numeric order ID.' }, { status: 400 });
   }
 
   try {
@@ -30,7 +29,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
 
     if (!response.body || !response.body.order) {
-      return json({ error: 'Order not found. Please check the order ID.' }, { status: 404 });
+      return Response.json({ error: 'Order not found. Please check the order ID.' }, { status: 404 });
     }
 
     const order = response.body.order as any;
@@ -44,7 +43,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
 
     if (existingInvoice) {
-      return json({
+      return Response.json({
         error: 'Invoice already exists for this order',
         invoice: existingInvoice,
       }, { status: 400 });
@@ -70,14 +69,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
 
-    return json({
+    return Response.json({
       success: true,
       invoice,
       message: 'Invoice created successfully',
     });
   } catch (error: any) {
     console.error('Error creating invoice:', error);
-    return json({
+    return Response.json({
       error: error.message || 'Failed to create invoice',
     }, { status: 500 });
   }
