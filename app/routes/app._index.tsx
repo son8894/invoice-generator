@@ -191,6 +191,44 @@ export default function Index() {
     }
   }, [fetcher.data, shopify]);
 
+  const downloadPDF = async (invoiceId: string, invoiceNumber: string) => {
+    try {
+      shopify.toast.show('Generating PDF...');
+      
+      const response = await fetch(`/api/invoices/${invoiceId}/download`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/pdf',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoiceNumber}.pdf`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      shopify.toast.show('PDF downloaded successfully');
+    } catch (err: any) {
+      console.error('Download failed:', err);
+      shopify.toast.show(`Failed to download PDF: ${err.message}`, { isError: true });
+    }
+  };
+
   return (
     <s-page heading="Invoice Generator">
       <Link to="/app/invoices" slot="primary-action">
@@ -288,15 +326,13 @@ export default function Index() {
                     {invoice.emailSent && (
                       <s-badge tone="success">Email Sent</s-badge>
                     )}
-                    <a
-                      href={`/api/invoices/${invoice.id}/download`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <s-button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => downloadPDF(invoice.id, invoice.invoiceNumber)}
                     >
-                      <s-button variant="secondary" size="sm">
-                        Download PDF
-                      </s-button>
-                    </a>
+                      Download PDF
+                    </s-button>
                   </s-stack>
                 </s-stack>
               </s-box>
