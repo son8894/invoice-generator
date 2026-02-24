@@ -195,7 +195,7 @@ export default function Index() {
     try {
       shopify.toast.show('Generating PDF...');
       
-      const response = await fetch(`/api/invoices/${invoiceId}/download`, {
+      const response = await fetch(`/app/invoices/${invoiceId}/download`, {
         method: 'GET',
         credentials: 'include',
         headers: {
@@ -204,7 +204,8 @@ export default function Index() {
       });
 
       if (!response.ok) {
-        throw new Error(`Download failed: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(errorText || `Download failed: ${response.statusText}`);
       }
 
       const blob = await response.blob();
