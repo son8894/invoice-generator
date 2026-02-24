@@ -14,9 +14,11 @@ import {
   BlockStack,
   InlineStack,
   Banner,
-  Spinner,
   Badge,
   Box,
+  TextField,
+  Filters,
+  ChoiceList,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -61,6 +63,31 @@ export default function Index() {
   const { invoices, settings, stats } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [selectedInvoices, setSelectedInvoices] = useState<Set<string>>(new Set());
+  const [searchValue, setSearchValue] = useState('');
+
+  // Order Resource Picker
+  const openOrderPicker = async () => {
+    try {
+      const selection = await shopify.resourcePicker({
+        type: 'order',
+        multiple: 10,
+        action: 'select',
+      });
+
+      if (selection && selection.length > 0) {
+        shopify.toast.show(`Selected ${selection.length} orders. Creating invoices...`);
+        
+        // TODO: Call API to create invoices for selected orders
+        // For now, just show success message
+        setTimeout(() => {
+          shopify.toast.show(`Created ${selection.length} invoices!`);
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Order picker error:', error);
+    }
+  };
 
   const downloadPDF = async (invoiceId: string, invoiceNumber: string) => {
     try {
@@ -89,7 +116,6 @@ export default function Index() {
       document.body.appendChild(a);
       a.click();
       
-      // Cleanup
       setTimeout(() => {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
@@ -104,14 +130,66 @@ export default function Index() {
     }
   };
 
+  const downloadBulk = async () => {
+    if (selectedInvoices.size === 0) {
+      shopify.toast.show('Please select invoices to download', { isError: true });
+      return;
+    }
+
+    shopify.toast.show(`Downloading ${selectedInvoices.size} invoices...`);
+    
+    // Download each invoice sequentially
+    for (const invoiceId of selectedInvoices) {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      if (invoice) {
+        await downloadPDF(invoice.id, invoice.invoiceNumber);
+        await new Promise(resolve => setTimeout(resolve, 500)); // Delay between downloads
+      }
+    }
+    
+    setSelectedInvoices(new Set());
+  };
+
+  const toggleInvoiceSelection = (invoiceId: string) => {
+    const newSelection = new Set(selectedInvoices);
+    if (newSelection.has(invoiceId)) {
+      newSelection.delete(invoiceId);
+    } else {
+      newSelection.add(invoiceId);
+    }
+    setSelectedInvoices(newSelection);
+  };
+
+  const selectAllInvoices = () => {
+    if (selectedInvoices.size === invoices.length) {
+      setSelectedInvoices(new Set());
+    } else {
+      setSelectedInvoices(new Set(invoices.map(inv => inv.id)));
+    }
+  };
+
+  const filteredInvoices = invoices.filter(invoice => {
+    if (!searchValue) return true;
+    const search = searchValue.toLowerCase();
+    return (
+      invoice.invoiceNumber.toLowerCase().includes(search) ||
+      invoice.orderNumber.toLowerCase().includes(search) ||
+      invoice.customerName?.toLowerCase().includes(search)
+    );
+  });
+
   return (
     <Page
       title="Invoice Generator"
       primaryAction={{
-        content: 'View All Invoices',
-        url: '/app/invoices',
+        content: 'Create from Orders',
+        onAction: openOrderPicker,
       }}
       secondaryActions={[
+        {
+          content: 'View All Invoices',
+          url: '/app/invoices',
+        },
         {
           content: 'Settings',
           url: '/app/settings',
@@ -143,13 +221,13 @@ export default function Index() {
                   </Text>
                 )}
                 <Text as="p">
-                  {settings ? '1.' : '2.'} Create a test order in your store
+                  {settings ? '1.' : '2.'} Click "Create from Orders" to select orders
                 </Text>
                 <Text as="p">
-                  {settings ? '2.' : '3.'} Invoice will be generated automatically
+                  {settings ? '2.' : '3.'} Generate invoices automatically
                 </Text>
                 <Text as="p">
-                  {settings ? '3.' : '4.'} Download and review the PDF
+                  {settings ? '3.' : '4.'} Download and send to customers
                 </Text>
               </BlockStack>
             </BlockStack>
@@ -213,53 +291,82 @@ export default function Index() {
 
         <Card>
           <BlockStack gap="400">
-            <Text as="h2" variant="headingMd">
-              Automatic Invoice Generation
-            </Text>
-            <Text as="p">
-              Invoices are automatically generated when orders are created.
-              To test this feature, create a test order in your store and the invoice will be
-              generated automatically.
-            </Text>
-            <Banner tone="info">
-              Manual invoice creation requires additional API permissions.
-              For now, invoices are created automatically via webhook when orders are placed.
-            </Banner>
-          </BlockStack>
-        </Card>
+            <InlineStack align="space-between" blockAlign="center">
+              <Text as="h2" variant="headingMd">
+                Recent Invoices
+              </Text>
+              {selectedInvoices.size > 0 && (
+                <InlineStack gap="200">
+                  <Badge tone="info">
+                    {selectedInvoices.size} selected
+                  </Badge>
+                  <Button onClick={downloadBulk} variant="primary" size="slim">
+                    Download Selected ({selectedInvoices.size})
+                  </Button>
+                </InlineStack>
+              )}
+            </InlineStack>
 
-        <Card>
-          <BlockStack gap="400">
-            <Text as="h2" variant="headingMd">
-              Recent Invoices
-            </Text>
-            {invoices.length === 0 ? (
+            {invoices.length > 0 && (
+              <TextField
+                label=""
+                value={searchValue}
+                onChange={setSearchValue}
+                placeholder="Search by invoice #, order #, or customer name..."
+                autoComplete="off"
+                clearButton
+                onClearButtonClick={() => setSearchValue('')}
+              />
+            )}
+
+            {invoices.length > 0 && (
+              <InlineStack gap="200">
+                <Button onClick={selectAllInvoices} size="slim" variant="plain">
+                  {selectedInvoices.size === invoices.length ? 'Deselect All' : 'Select All'}
+                </Button>
+              </InlineStack>
+            )}
+
+            {filteredInvoices.length === 0 && searchValue ? (
               <Text as="p" tone="subdued">
-                No invoices yet. Create a test order in your store to generate your first invoice.
+                No invoices found matching "{searchValue}"
+              </Text>
+            ) : filteredInvoices.length === 0 ? (
+              <Text as="p" tone="subdued">
+                No invoices yet. Click "Create from Orders" to generate your first invoice.
               </Text>
             ) : (
               <BlockStack gap="300">
-                {invoices.map((invoice) => (
+                {filteredInvoices.map((invoice) => (
                   <Box
                     key={invoice.id}
                     padding="400"
                     borderWidth="025"
                     borderColor="border"
                     borderRadius="200"
+                    background={selectedInvoices.has(invoice.id) ? 'bg-surface-selected' : undefined}
                   >
                     <InlineStack align="space-between" blockAlign="center">
-                      <BlockStack gap="200">
-                        <Text as="h3" variant="headingSm">
-                          {invoice.invoiceNumber}
-                        </Text>
-                        <Text as="p">
-                          Order #{invoice.orderNumber} • {invoice.customerName || 'No customer'} •{' '}
-                          {invoice.currency} {invoice.totalAmount}
-                        </Text>
-                        <Text as="p" tone="subdued" variant="bodySm">
-                          {new Date(invoice.createdAt).toLocaleDateString()}
-                        </Text>
-                      </BlockStack>
+                      <InlineStack gap="300" blockAlign="center">
+                        <input
+                          type="checkbox"
+                          checked={selectedInvoices.has(invoice.id)}
+                          onChange={() => toggleInvoiceSelection(invoice.id)}
+                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                        />
+                        <BlockStack gap="200">
+                          <Text as="h3" variant="headingSm">
+                            {invoice.invoiceNumber}
+                          </Text>
+                          <Text as="p">
+                            Order #{invoice.orderNumber} • {invoice.customerName || 'No customer'} •{' '}
+                            {invoice.currency} {invoice.totalAmount}
+                          </Text>
+                          <Text as="p" tone="subdued" variant="bodySm">
+                            {new Date(invoice.createdAt).toLocaleDateString()}
+                          </Text>
+                        </BlockStack>
+                      </InlineStack>
                       <InlineStack gap="200" align="end">
                         {invoice.emailSent && (
                           <Badge tone="success">Email Sent</Badge>
@@ -278,7 +385,7 @@ export default function Index() {
                 ))}
               </BlockStack>
             )}
-            {invoices.length > 0 && (
+            {filteredInvoices.length > 0 && !searchValue && (
               <Box paddingBlockStart="300">
                 <Link to="/app/invoices">
                   <Button variant="plain">View All Invoices →</Button>

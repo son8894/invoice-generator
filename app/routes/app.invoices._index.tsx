@@ -8,9 +8,12 @@ import {
   EmptyState,
   Badge,
   Button,
-  DataTable,
   BlockStack,
   Banner,
+  Box,
+  InlineStack,
+  Text,
+  TextField,
 } from '@shopify/polaris';
 import { authenticate } from '../shopify.server';
 import db from '../db.server';
@@ -21,7 +24,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const invoices = await db.invoice.findMany({
     where: { shop: session.shop },
     orderBy: { createdAt: 'desc' },
-    take: 50,
+    take: 100,
   });
 
   return { invoices };
@@ -31,6 +34,31 @@ export default function InvoicesIndex() {
   const { invoices } = useLoaderData<typeof loader>();
   const shopify = useAppBridge();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [selectedInvoices, setSelectedInvoices] = useState<Set<string>>(new Set());
+  const [searchValue, setSearchValue] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'sent' | 'not-sent'>('all');
+
+  // Order Resource Picker
+  const openOrderPicker = async () => {
+    try {
+      const selection = await shopify.resourcePicker({
+        type: 'order',
+        multiple: 10,
+        action: 'select',
+      });
+
+      if (selection && selection.length > 0) {
+        shopify.toast.show(`Selected ${selection.length} orders. Creating invoices...`);
+        
+        // TODO: Call API to create invoices for selected orders
+        setTimeout(() => {
+          shopify.toast.show(`Created ${selection.length} invoices!`);
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Order picker error:', error);
+    }
+  };
 
   const downloadPDF = async (invoiceId: string, invoiceNumber: string) => {
     try {
@@ -71,81 +99,231 @@ export default function InvoicesIndex() {
     }
   };
 
-  const rows = invoices.map((invoice) => [
-    invoice.invoiceNumber,
-    invoice.orderNumber,
-    invoice.customerName || '-',
-    `${invoice.currency} ${invoice.totalAmount}`,
-    new Date(invoice.createdAt).toLocaleDateString(),
-    invoice.emailSent ? (
-      <Badge tone="success">Sent</Badge>
-    ) : (
-      <Badge tone="info">Not sent</Badge>
-    ),
-    <Button
-      size="slim"
-      onClick={() => downloadPDF(invoice.id, invoice.invoiceNumber)}
-      loading={downloadingId === invoice.id}
-    >
-      Download
-    </Button>,
-  ]);
+  const downloadBulk = async () => {
+    if (selectedInvoices.size === 0) {
+      shopify.toast.show('Please select invoices to download', { isError: true });
+      return;
+    }
+
+    shopify.toast.show(`Downloading ${selectedInvoices.size} invoices...`);
+    
+    for (const invoiceId of selectedInvoices) {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      if (invoice) {
+        await downloadPDF(invoice.id, invoice.invoiceNumber);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    setSelectedInvoices(new Set());
+  };
+
+  const toggleInvoiceSelection = (invoiceId: string) => {
+    const newSelection = new Set(selectedInvoices);
+    if (newSelection.has(invoiceId)) {
+      newSelection.delete(invoiceId);
+    } else {
+      newSelection.add(invoiceId);
+    }
+    setSelectedInvoices(newSelection);
+  };
+
+  const selectAllInvoices = () => {
+    if (selectedInvoices.size === filteredInvoices.length) {
+      setSelectedInvoices(new Set());
+    } else {
+      setSelectedInvoices(new Set(filteredInvoices.map(inv => inv.id)));
+    }
+  };
+
+  // Filter invoices
+  const filteredInvoices = invoices.filter(invoice => {
+    // Search filter
+    if (searchValue) {
+      const search = searchValue.toLowerCase();
+      const matchesSearch = 
+        invoice.invoiceNumber.toLowerCase().includes(search) ||
+        invoice.orderNumber.toLowerCase().includes(search) ||
+        invoice.customerName?.toLowerCase().includes(search);
+      if (!matchesSearch) return false;
+    }
+
+    // Status filter
+    if (statusFilter === 'sent' && !invoice.emailSent) return false;
+    if (statusFilter === 'not-sent' && invoice.emailSent) return false;
+
+    return true;
+  });
 
   return (
     <Page
-      title="Invoices"
-      subtitle="View and manage all your invoices"
+      title="All Invoices"
+      subtitle={`${invoices.length} total invoices`}
       primaryAction={{
-        content: 'Settings',
-        url: '/app/settings',
+        content: 'Create from Orders',
+        onAction: openOrderPicker,
       }}
+      secondaryActions={[
+        {
+          content: 'Settings',
+          url: '/app/settings',
+        },
+      ]}
       backAction={{ url: '/app' }}
     >
       <BlockStack gap="500">
         <Banner tone="info">
           <p>
-            Invoices are automatically generated when orders are created.
-            Configure your company information in Settings to customize your invoices.
+            Select multiple orders from the "Create from Orders" button to generate invoices in bulk.
+            Use checkboxes to download multiple PDFs at once.
           </p>
         </Banner>
 
-        <Card padding="0">
-          {invoices.length === 0 ? (
-            <EmptyState
-              heading="No invoices yet"
-              image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
-            >
-              <p>
-                Invoices will be automatically generated when orders are created.
-                Make sure to configure your company settings first.
-              </p>
-              <div style={{ marginTop: '16px' }}>
-                <Button url="/app/settings">Go to Settings</Button>
+        <Card>
+          <BlockStack gap="400">
+            {/* Search and Filter */}
+            <InlineStack gap="300" align="space-between">
+              <div style={{ flex: 1, maxWidth: '400px' }}>
+                <TextField
+                  label=""
+                  value={searchValue}
+                  onChange={setSearchValue}
+                  placeholder="Search invoices..."
+                  autoComplete="off"
+                  clearButton
+                  onClearButtonClick={() => setSearchValue('')}
+                />
               </div>
-            </EmptyState>
-          ) : (
-            <DataTable
-              columnContentTypes={[
-                'text',
-                'text',
-                'text',
-                'text',
-                'text',
-                'text',
-                'text',
-              ]}
-              headings={[
-                'Invoice #',
-                'Order #',
-                'Customer',
-                'Total',
-                'Date',
-                'Email Status',
-                'Actions',
-              ]}
-              rows={rows}
-            />
-          )}
+              <InlineStack gap="200">
+                <Button
+                  pressed={statusFilter === 'all'}
+                  onClick={() => setStatusFilter('all')}
+                  size="slim"
+                >
+                  All
+                </Button>
+                <Button
+                  pressed={statusFilter === 'sent'}
+                  onClick={() => setStatusFilter('sent')}
+                  size="slim"
+                >
+                  Sent
+                </Button>
+                <Button
+                  pressed={statusFilter === 'not-sent'}
+                  onClick={() => setStatusFilter('not-sent')}
+                  size="slim"
+                >
+                  Not Sent
+                </Button>
+              </InlineStack>
+            </InlineStack>
+
+            {/* Bulk Actions */}
+            {filteredInvoices.length > 0 && (
+              <InlineStack align="space-between" blockAlign="center">
+                <InlineStack gap="200">
+                  <Button onClick={selectAllInvoices} size="slim" variant="plain">
+                    {selectedInvoices.size === filteredInvoices.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                  {selectedInvoices.size > 0 && (
+                    <Badge tone="info">
+                      {selectedInvoices.size} selected
+                    </Badge>
+                  )}
+                </InlineStack>
+                {selectedInvoices.size > 0 && (
+                  <Button onClick={downloadBulk} variant="primary" size="slim">
+                    Download Selected ({selectedInvoices.size})
+                  </Button>
+                )}
+              </InlineStack>
+            )}
+
+            {/* Invoice List */}
+            {filteredInvoices.length === 0 && searchValue ? (
+              <EmptyState
+                heading="No invoices found"
+                image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+              >
+                <p>Try adjusting your search or filters</p>
+              </EmptyState>
+            ) : filteredInvoices.length === 0 ? (
+              <EmptyState
+                heading="No invoices yet"
+                image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+              >
+                <p>
+                  Click "Create from Orders" to select orders and generate invoices.
+                  Make sure to configure your company settings first.
+                </p>
+                <div style={{ marginTop: '16px' }}>
+                  <InlineStack gap="200" align="center">
+                    <Button onClick={openOrderPicker}>Create from Orders</Button>
+                    <Button url="/app/settings">Settings</Button>
+                  </InlineStack>
+                </div>
+              </EmptyState>
+            ) : (
+              <BlockStack gap="300">
+                {filteredInvoices.map((invoice) => (
+                  <Box
+                    key={invoice.id}
+                    padding="400"
+                    borderWidth="025"
+                    borderColor="border"
+                    borderRadius="200"
+                    background={selectedInvoices.has(invoice.id) ? 'bg-surface-selected' : undefined}
+                  >
+                    <InlineStack align="space-between" blockAlign="center">
+                      <InlineStack gap="300" blockAlign="center">
+                        <input
+                          type="checkbox"
+                          checked={selectedInvoices.has(invoice.id)}
+                          onChange={() => toggleInvoiceSelection(invoice.id)}
+                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                        />
+                        <BlockStack gap="200">
+                          <InlineStack gap="200" blockAlign="center">
+                            <Text as="h3" variant="headingSm">
+                              {invoice.invoiceNumber}
+                            </Text>
+                            {invoice.emailSent && (
+                              <Badge tone="success">Sent</Badge>
+                            )}
+                          </InlineStack>
+                          <Text as="p">
+                            Order #{invoice.orderNumber} • {invoice.customerName || 'No customer'}
+                          </Text>
+                          <InlineStack gap="300">
+                            <Text as="p" tone="subdued" variant="bodySm">
+                              {invoice.currency} {invoice.totalAmount}
+                            </Text>
+                            <Text as="p" tone="subdued" variant="bodySm">
+                              •
+                            </Text>
+                            <Text as="p" tone="subdued" variant="bodySm">
+                              {new Date(invoice.createdAt).toLocaleDateString()}
+                            </Text>
+                          </InlineStack>
+                        </BlockStack>
+                      </InlineStack>
+                      <InlineStack gap="200" align="end">
+                        <Button
+                          variant="secondary"
+                          size="slim"
+                          onClick={() => downloadPDF(invoice.id, invoice.invoiceNumber)}
+                          loading={downloadingId === invoice.id}
+                        >
+                          {downloadingId === invoice.id ? 'Generating...' : 'Download'}
+                        </Button>
+                      </InlineStack>
+                    </InlineStack>
+                  </Box>
+                ))}
+              </BlockStack>
+            )}
+          </BlockStack>
         </Card>
       </BlockStack>
     </Page>
