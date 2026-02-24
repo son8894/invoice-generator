@@ -61,73 +61,39 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     try {
       let order: any;
-
-      // Try to fetch by Order Number first (e.g., #1008 or 1008)
       const orderNumber = orderIdInput.replace('#', '');
-      
-      // Search by order name (GraphQL)
-      const graphqlQuery = `
-        query getOrderByName($query: String!) {
-          orders(first: 1, query: $query) {
-            edges {
-              node {
-                id
-                legacyResourceId
-                name
-                totalPriceSet {
-                  shopMoney {
-                    amount
-                    currencyCode
-                  }
-                }
-                customer {
-                  firstName
-                  lastName
-                  email
-                }
-              }
-            }
-          }
-        }
-      `;
 
-      const graphqlResponse = await admin.graphql(graphqlQuery, {
-        variables: {
-          query: `name:#${orderNumber}`,
-        },
-      });
-
-      const graphqlData = await graphqlResponse.json();
-
-      if (graphqlData?.data?.orders?.edges?.length > 0) {
-        // Found order by number
-        const gqlOrder = graphqlData.data.orders.edges[0].node;
-        const legacyId = gqlOrder.legacyResourceId;
-
-        // Fetch full order details via REST API
-        const restResponse = await admin.rest.get({
-          path: `orders/${legacyId}`,
+      // Search orders by name using REST API (no Protected Customer Data needed)
+      try {
+        const ordersResponse = await admin.rest.get({
+          path: `orders.json?name=${orderNumber}&limit=1`,
         });
 
-        if (restResponse.body?.order) {
-          order = restResponse.body.order;
+        if (ordersResponse.body?.orders?.length > 0) {
+          order = ordersResponse.body.orders[0];
         }
-      } else {
-        // Try direct ID lookup (if user provided internal ID)
-        if (/^\d+$/.test(orderIdInput)) {
+      } catch (searchError) {
+        console.error('Order search failed:', searchError);
+      }
+
+      // If not found by name, try direct ID lookup
+      if (!order && /^\d+$/.test(orderIdInput)) {
+        try {
           const restResponse = await admin.rest.get({
-            path: `orders/${orderIdInput}`,
+            path: `orders/${orderIdInput}.json`,
           });
 
           if (restResponse.body?.order) {
             order = restResponse.body.order;
           }
+        } catch (idError) {
+          console.error('Order ID lookup failed:', idError);
         }
       }
 
       if (!order) {
         return Response.json({ 
-          error: 'Order not found. Please enter a valid order number (e.g., 1008) or order ID.' 
+          error: `Order not found. Please check the order number. Searched for: ${orderNumber}` 
         }, { status: 404 });
       }
 
