@@ -33,12 +33,12 @@ export interface InvoiceData {
   items: InvoiceItem[];
   subtotal: string;
   tax?: string;
-  taxRate?: number; // e.g., 0.10 for 10%
+  taxRate?: number;
   shipping?: string;
   total: string;
   currency: string;
   company: CompanyInfo;
-  paymentTerms?: string; // e.g., "Payment due within 30 days"
+  paymentTerms?: string;
 }
 
 interface I18nStrings {
@@ -122,41 +122,76 @@ const translations: Record<Locale, I18nStrings> = {
 };
 
 /**
- * Load CJK fonts from app/fonts directory
+ * Detect if text contains Korean or Japanese characters
  */
-function getFontPath(locale: Locale): string | null {
+function detectCJKLanguage(text: string): 'ko' | 'ja' | null {
+  const koreanRegex = /[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/;
+  const japaneseRegex = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
+  
+  if (koreanRegex.test(text)) return 'ko';
+  if (japaneseRegex.test(text)) return 'ja';
+  return null;
+}
+
+/**
+ * Detect CJK language from invoice data
+ */
+function detectCJKFromInvoice(invoiceData: InvoiceData): 'ko' | 'ja' | null {
+  const allText = [
+    invoiceData.customerName || '',
+    invoiceData.customerAddress || '',
+    ...invoiceData.items.map(item => item.title),
+    invoiceData.company.name || '',
+    invoiceData.company.address || '',
+  ].join(' ');
+  
+  return detectCJKLanguage(allText);
+}
+
+/**
+ * Register CJK fonts (Regular + Bold)
+ */
+function registerCJKFonts(doc: PDFKit.PDFDocument, locale: 'ko' | 'ja'): boolean {
   try {
     const basePath = path.join(process.cwd(), 'app', 'fonts');
     
     if (locale === 'ko') {
-      const fontPath = path.join(basePath, 'NotoSansKR.ttf');
-      if (fs.existsSync(fontPath)) {
-        console.log('✅ Korean font loaded:', fontPath);
-        return fontPath;
+      const regularPath = path.join(basePath, 'NotoSansKR.ttf');
+      const boldPath = path.join(basePath, 'NotoSansKR-Bold.ttf');
+      
+      if (fs.existsSync(regularPath) && fs.existsSync(boldPath)) {
+        doc.registerFont('NotoSansKR', regularPath);
+        doc.registerFont('NotoSansKR-Bold', boldPath);
+        console.log('✅ Korean fonts loaded (Regular + Bold)');
+        return true;
       } else {
-        console.warn('⚠️ Korean font not found:', fontPath);
+        console.warn('⚠️ Korean fonts not found');
       }
     }
     
     if (locale === 'ja') {
-      const fontPath = path.join(basePath, 'NotoSansJP.ttf');
-      if (fs.existsSync(fontPath)) {
-        console.log('✅ Japanese font loaded:', fontPath);
-        return fontPath;
+      const regularPath = path.join(basePath, 'NotoSansJP.ttf');
+      const boldPath = path.join(basePath, 'NotoSansJP-Bold.ttf');
+      
+      if (fs.existsSync(regularPath) && fs.existsSync(boldPath)) {
+        doc.registerFont('NotoSansJP', regularPath);
+        doc.registerFont('NotoSansJP-Bold', boldPath);
+        console.log('✅ Japanese fonts loaded (Regular + Bold)');
+        return true;
       } else {
-        console.warn('⚠️ Japanese font not found:', fontPath);
+        console.warn('⚠️ Japanese fonts not found');
       }
     }
     
-    return null;
+    return false;
   } catch (error) {
-    console.error('Error loading font:', error);
-    return null;
+    console.error('Error loading fonts:', error);
+    return false;
   }
 }
 
 /**
- * Generate professional PDF invoice with color header, logo, and proper formatting
+ * Generate professional PDF invoice with CJK support
  */
 export async function generateProfessionalInvoicePDF(
   data: InvoiceData,
@@ -175,44 +210,60 @@ export async function generateProfessionalInvoicePDF(
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    // Register CJK fonts if needed
-    const fontPath = getFontPath(locale);
-    const useCustomFont = fontPath !== null;
-    
-    if (useCustomFont && fontPath) {
-      try {
-        doc.registerFont('CustomFont', fontPath);
-        doc.font('CustomFont');
-      } catch (error) {
-        console.error('Failed to register font, falling back to default:', error);
-        doc.font('Helvetica');
+    // Auto-detect CJK from invoice data if locale is English
+    let detectedLocale: 'ko' | 'ja' | null = null;
+    if (locale === 'en') {
+      detectedLocale = detectCJKFromInvoice(data);
+      if (detectedLocale) {
+        console.log(`🔍 Auto-detected ${detectedLocale === 'ko' ? 'Korean' : 'Japanese'} text`);
       }
-    } else {
-      doc.font('Helvetica');
+    } else if (locale === 'ko') {
+      detectedLocale = 'ko';
+    } else if (locale === 'ja') {
+      detectedLocale = 'ja';
     }
 
-    const primaryColor = '#4F46E5'; // Indigo-600
+    // Register CJK fonts if needed
+    const useCJKFont = detectedLocale !== null;
+    if (useCJKFont && detectedLocale) {
+      registerCJKFonts(doc, detectedLocale);
+    }
+
+    // Helper function to set font
+    const setFont = (style: 'regular' | 'bold' = 'regular') => {
+      if (useCJKFont && detectedLocale === 'ko') {
+        doc.font(style === 'bold' ? 'NotoSansKR-Bold' : 'NotoSansKR');
+      } else if (useCJKFont && detectedLocale === 'ja') {
+        doc.font(style === 'bold' ? 'NotoSansJP-Bold' : 'NotoSansJP');
+      } else {
+        doc.font(style === 'bold' ? 'Helvetica-Bold' : 'Helvetica');
+      }
+    };
+
+    // Initial font
+    setFont('regular');
+
+    const primaryColor = '#4F46E5';
     const lightGray = '#F3F4F6';
     const darkGray = '#374151';
     const mediumGray = '#6B7280';
 
-    // ====================
-    // HEADER (Colored Background)
-    // ====================
+    // HEADER
     const headerHeight = 140;
     doc.rect(0, 0, doc.page.width, headerHeight).fill(primaryColor);
 
-    // Company Logo (if provided)
     const logoY = 30;
     const logoX = 50;
-    // TODO: Add logo image if data.company.logoPath exists
-    // doc.image(data.company.logoPath, logoX, logoY, { width: 80 });
 
-    // Company Name & Address (White text on colored background)
+    // Company Name
     doc.fillColor('white');
-    doc.fontSize(18).font('Helvetica-Bold').text(data.company.name || 'Your Company', logoX, logoY, { width: 250 });
+    doc.fontSize(18);
+    setFont('bold');
+    doc.text(data.company.name || 'Your Company', logoX, logoY, { width: 250 });
     
-    doc.fontSize(9).font('Helvetica').moveDown(0.3);
+    doc.fontSize(9);
+    setFont('regular');
+    doc.moveDown(0.3);
     const addressX = logoX;
     const addressY = doc.y;
     
@@ -223,54 +274,59 @@ export async function generateProfessionalInvoicePDF(
     if (data.company.country) doc.text(data.company.country);
     if (data.company.taxId) doc.text(`${t.taxId}: ${data.company.taxId}`);
 
-    // INVOICE Title (Right side)
-    doc.fontSize(28).font('Helvetica-Bold').fillColor('white');
+    // INVOICE Title
+    doc.fontSize(28);
+    setFont('bold');
+    doc.fillColor('white');
     doc.text(t.invoice, 350, 40, { align: 'right' });
 
-    // Invoice Details (Right side)
-    doc.fontSize(10).font('Helvetica').fillColor('white');
+    // Invoice Details
+    doc.fontSize(10);
+    setFont('regular');
+    doc.fillColor('white');
     doc.text(`${t.invoiceNumber}: ${data.invoiceNumber}`, 350, 85, { align: 'right' });
     doc.text(`${t.orderNumber}: ${data.orderNumber}`, 350, 100, { align: 'right' });
     doc.text(`${t.date}: ${data.date}`, 350, 115, { align: 'right' });
 
-    // Reset to black text
     doc.fillColor(darkGray);
 
-    // ====================
-    // BILL TO Section
-    // ====================
+    // BILL TO
     const billToY = headerHeight + 30;
-    doc.fontSize(11).font('Helvetica-Bold').fillColor(darkGray);
+    doc.fontSize(11);
+    setFont('bold');
+    doc.fillColor(darkGray);
     doc.text(t.billTo, 50, billToY);
 
-    doc.fontSize(10).font('Helvetica').fillColor(mediumGray).moveDown(0.5);
+    doc.fontSize(10);
+    setFont('regular');
+    doc.fillColor(mediumGray);
+    doc.moveDown(0.5);
     if (data.customerName) doc.text(data.customerName, 50);
     if (data.customerEmail) doc.text(data.customerEmail);
     if (data.customerAddress) doc.text(data.customerAddress);
 
     doc.moveDown(1.5);
 
-    // ====================
     // ITEMS TABLE
-    // ====================
     const tableTop = doc.y;
     const itemX = 50;
     const quantityX = 320;
     const priceX = 400;
     const totalX = 480;
 
-    // Table Header (Gray background)
     doc.rect(50, tableTop - 5, 500, 25).fill(lightGray);
     
-    doc.fontSize(10).font('Helvetica-Bold').fillColor(darkGray);
+    doc.fontSize(10);
+    setFont('bold');
+    doc.fillColor(darkGray);
     doc.text(t.item, itemX, tableTop + 5);
     doc.text(t.quantity, quantityX, tableTop + 5, { width: 70, align: 'center' });
     doc.text(t.price, priceX, tableTop + 5, { width: 70, align: 'right' });
     doc.text(t.total, totalX, tableTop + 5, { width: 70, align: 'right' });
 
-    // Table Rows
     let y = tableTop + 35;
-    doc.font('Helvetica').fillColor(darkGray);
+    setFont('regular');
+    doc.fillColor(darkGray);
 
     data.items.forEach((item, index) => {
       if (y > 700) {
@@ -278,7 +334,6 @@ export async function generateProfessionalInvoicePDF(
         y = 50;
       }
 
-      // Alternate row background
       if (index % 2 === 0) {
         doc.rect(50, y - 5, 500, 30).fill('#FAFAFA');
       }
@@ -292,24 +347,21 @@ export async function generateProfessionalInvoicePDF(
       y += 30;
     });
 
-    // Separator line
     doc.moveTo(50, y + 5).lineTo(550, y + 5).stroke('#E5E7EB');
     y += 25;
 
-    // ====================
-    // TOTALS Section
-    // ====================
+    // TOTALS
     const totalsLabelX = 380;
     const totalsValueX = 480;
 
-    doc.fontSize(10).font('Helvetica').fillColor(mediumGray);
+    doc.fontSize(10);
+    setFont('regular');
+    doc.fillColor(mediumGray);
 
-    // Subtotal
     doc.text(t.subtotal + ':', totalsLabelX, y);
     doc.text(`${data.currency} ${data.subtotal}`, totalsValueX, y, { width: 70, align: 'right' });
     y += 20;
 
-    // Tax (if provided)
     if (data.tax) {
       const taxLabel = data.taxRate 
         ? `${t.tax} (${(data.taxRate * 100).toFixed(0)}%):`
@@ -319,32 +371,31 @@ export async function generateProfessionalInvoicePDF(
       y += 20;
     }
 
-    // Shipping (if provided)
     if (data.shipping) {
       doc.text(t.shipping + ':', totalsLabelX, y);
       doc.text(`${data.currency} ${data.shipping}`, totalsValueX, y, { width: 70, align: 'right' });
       y += 20;
     }
 
-    // Total (Bold, larger)
-    doc.fontSize(12).font('Helvetica-Bold').fillColor(darkGray);
+    doc.fontSize(12);
+    setFont('bold');
+    doc.fillColor(darkGray);
     doc.rect(totalsLabelX - 10, y - 5, 180, 30).fill(lightGray);
     doc.fillColor(primaryColor);
     doc.text(t.total + ':', totalsLabelX, y + 5);
     doc.text(`${data.currency} ${data.total}`, totalsValueX, y + 5, { width: 70, align: 'right' });
 
-    // ====================
     // FOOTER
-    // ====================
     const footerY = doc.page.height - 100;
     
-    doc.fontSize(9).font('Helvetica').fillColor(mediumGray);
+    doc.fontSize(9);
+    setFont('regular');
+    doc.fillColor(mediumGray);
     doc.text(t.thankYou, 50, footerY, { align: 'center' });
     
     const paymentTermsText = data.paymentTerms || t.paymentTerms;
     doc.text(paymentTermsText, 50, footerY + 15, { align: 'center' });
 
-    // Company contact info in footer
     if (data.company.email || data.company.phone) {
       let footerContact = [];
       if (data.company.email) footerContact.push(`${t.email}: ${data.company.email}`);
@@ -356,9 +407,6 @@ export async function generateProfessionalInvoicePDF(
   });
 }
 
-/**
- * Get locale from shop domain or settings
- */
 export function detectLocale(shop: string): Locale {
   if (shop.includes('.jp') || shop.includes('japan')) {
     return 'ja';
