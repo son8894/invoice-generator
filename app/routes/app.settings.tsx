@@ -89,8 +89,8 @@ export default function Settings() {
 
   const localeOptions = [
     { label: 'English', value: 'en' },
-    { label: '한국어 (Korean)', value: 'ko' },
-    { label: '日本語 (Japanese)', value: 'ja' },
+    { label: '한국어 (Korean) - Coming Soon', value: 'ko', disabled: true },
+    { label: '日本語 (Japanese) - Coming Soon', value: 'ja', disabled: true },
   ];
 
   return (

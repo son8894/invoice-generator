@@ -194,6 +194,12 @@ export default function Index() {
         ]}
       >
         <BlockStack gap="500">
+        <Banner title="Invoice Generator - English Only (For Now)" tone="info">
+          <p>
+            Currently supports English invoices. Korean and Japanese language support coming in the next update!
+          </p>
+        </Banner>
+        
         {!settings && (
           <Banner title="Welcome to Invoice Generator!" tone="info">
             <p>

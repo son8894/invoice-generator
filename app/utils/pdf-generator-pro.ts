@@ -122,21 +122,30 @@ const translations: Record<Locale, I18nStrings> = {
 };
 
 /**
- * Load CJK fonts from node_modules
+ * Load CJK fonts from app/fonts directory
  */
 function getFontPath(locale: Locale): string | null {
   try {
-    // Try to find Noto Sans fonts from node_modules
-    const basePath = path.join(process.cwd(), 'node_modules');
+    const basePath = path.join(process.cwd(), 'app', 'fonts');
     
     if (locale === 'ko') {
-      const fontPath = path.join(basePath, '@fontsource/noto-sans-kr/files/noto-sans-kr-korean-400-normal.woff');
-      if (fs.existsSync(fontPath)) return fontPath;
+      const fontPath = path.join(basePath, 'NotoSansKR.ttf');
+      if (fs.existsSync(fontPath)) {
+        console.log('✅ Korean font loaded:', fontPath);
+        return fontPath;
+      } else {
+        console.warn('⚠️ Korean font not found:', fontPath);
+      }
     }
     
     if (locale === 'ja') {
-      const fontPath = path.join(basePath, '@fontsource/noto-sans-jp/files/noto-sans-jp-japanese-400-normal.woff');
-      if (fs.existsSync(fontPath)) return fontPath;
+      const fontPath = path.join(basePath, 'NotoSansJP.ttf');
+      if (fs.existsSync(fontPath)) {
+        console.log('✅ Japanese font loaded:', fontPath);
+        return fontPath;
+      } else {
+        console.warn('⚠️ Japanese font not found:', fontPath);
+      }
     }
     
     return null;

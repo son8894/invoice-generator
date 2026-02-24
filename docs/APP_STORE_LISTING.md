@@ -25,8 +25,9 @@ InvoiceGen automatically generates beautiful, professional PDF invoices for your
 - Your logo, address, and tax ID on every invoice
 - Color-coded headers and organized line items
 
-**🌍 Multi-Language Support**
-- English, Korean (한국어), Japanese (日本語)
+**🌍 Language Support**
+- English (fully supported)
+- Korean (한국어) and Japanese (日本語) coming in next update
 - Automatic currency conversion
 - Localized invoice templates
 
