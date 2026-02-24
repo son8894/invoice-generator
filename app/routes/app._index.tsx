@@ -17,12 +17,11 @@ import {
   Badge,
   Box,
   TextField,
-  Filters,
-  ChoiceList,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import db from "../db.server";
+import { OrderPickerModal } from "../components/OrderPickerModal";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -66,29 +65,19 @@ export default function Index() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [selectedInvoices, setSelectedInvoices] = useState<Set<string>>(new Set());
   const [searchValue, setSearchValue] = useState('');
+  const [orderPickerOpen, setOrderPickerOpen] = useState(false);
 
-  // Order Resource Picker
-  const openOrderPicker = async () => {
-    try {
-      const selected = await shopify.resourcePicker({
-        type: 'order',
-        multiple: 10,
-      });
-
-      if (selected && selected.length > 0) {
-        shopify.toast.show(`Selected ${selected.length} orders. Creating invoices...`);
-        console.log('Selected orders:', selected);
-        
-        // TODO: Call API to create invoices for selected orders
-        // For now, just show success message
-        setTimeout(() => {
-          shopify.toast.show(`Feature coming soon! Selected ${selected.length} orders.`);
-        }, 500);
-      }
-    } catch (error) {
-      console.error('Order picker error:', error);
-      shopify.toast.show('Failed to open order picker', { isError: true });
-    }
+  // Order Picker Handler
+  const handleOrderSelect = (selectedOrders: any[]) => {
+    shopify.toast.show(`Selected ${selectedOrders.length} orders. Creating invoices...`);
+    console.log('Selected orders:', selectedOrders);
+    
+    // TODO: Call API to create invoices for selected orders
+    // For now, just show success message
+    setTimeout(() => {
+      shopify.toast.show(`Feature coming soon! Will create ${selectedOrders.length} invoices.`);
+      setOrderPickerOpen(false);
+    }, 500);
   };
 
   const downloadPDF = async (invoiceId: string, invoiceNumber: string) => {
@@ -181,24 +170,30 @@ export default function Index() {
   });
 
   return (
-    <Page
-      title="Invoice Generator"
-      primaryAction={{
-        content: 'Create from Orders',
-        onAction: openOrderPicker,
-      }}
-      secondaryActions={[
-        {
-          content: 'View All Invoices',
-          onAction: () => navigate('/app/invoices'),
-        },
-        {
-          content: 'Settings',
-          onAction: () => navigate('/app/settings'),
-        },
-      ]}
-    >
-      <BlockStack gap="500">
+    <>
+      <OrderPickerModal
+        open={orderPickerOpen}
+        onClose={() => setOrderPickerOpen(false)}
+        onSelect={handleOrderSelect}
+      />
+      <Page
+        title="Invoice Generator"
+        primaryAction={{
+          content: 'Create from Orders',
+          onAction: () => setOrderPickerOpen(true),
+        }}
+        secondaryActions={[
+          {
+            content: 'View All Invoices',
+            onAction: () => navigate('/app/invoices'),
+          },
+          {
+            content: 'Settings',
+            onAction: () => navigate('/app/settings'),
+          },
+        ]}
+      >
+        <BlockStack gap="500">
         {!settings && (
           <Banner title="Welcome to Invoice Generator!" tone="info">
             <p>
@@ -396,8 +391,9 @@ export default function Index() {
             )}
           </BlockStack>
         </Card>
-      </BlockStack>
-    </Page>
+        </BlockStack>
+      </Page>
+    </>
   );
 }
 

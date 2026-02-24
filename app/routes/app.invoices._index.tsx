@@ -17,6 +17,7 @@ import {
 } from '@shopify/polaris';
 import { authenticate } from '../shopify.server';
 import db from '../db.server';
+import { OrderPickerModal } from '../components/OrderPickerModal';
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -38,28 +39,18 @@ export default function InvoicesIndex() {
   const [selectedInvoices, setSelectedInvoices] = useState<Set<string>>(new Set());
   const [searchValue, setSearchValue] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'sent' | 'not-sent'>('all');
+  const [orderPickerOpen, setOrderPickerOpen] = useState(false);
 
-  // Order Resource Picker
-  const openOrderPicker = async () => {
-    try {
-      const selected = await shopify.resourcePicker({
-        type: 'order',
-        multiple: 10,
-      });
-
-      if (selected && selected.length > 0) {
-        shopify.toast.show(`Selected ${selected.length} orders. Creating invoices...`);
-        console.log('Selected orders:', selected);
-        
-        // TODO: Call API to create invoices for selected orders
-        setTimeout(() => {
-          shopify.toast.show(`Feature coming soon! Selected ${selected.length} orders.`);
-        }, 500);
-      }
-    } catch (error) {
-      console.error('Order picker error:', error);
-      shopify.toast.show('Failed to open order picker', { isError: true });
-    }
+  // Order Picker Handler
+  const handleOrderSelect = (selectedOrders: any[]) => {
+    shopify.toast.show(`Selected ${selectedOrders.length} orders. Creating invoices...`);
+    console.log('Selected orders:', selectedOrders);
+    
+    // TODO: Call API to create invoices for selected orders
+    setTimeout(() => {
+      shopify.toast.show(`Feature coming soon! Will create ${selectedOrders.length} invoices.`);
+      setOrderPickerOpen(false);
+    }, 500);
   };
 
   const downloadPDF = async (invoiceId: string, invoiceNumber: string) => {
@@ -158,22 +149,28 @@ export default function InvoicesIndex() {
   });
 
   return (
-    <Page
-      title="All Invoices"
-      subtitle={`${invoices.length} total invoices`}
-      primaryAction={{
-        content: 'Create from Orders',
-        onAction: openOrderPicker,
-      }}
-      secondaryActions={[
-        {
-          content: 'Settings',
-          onAction: () => navigate('/app/settings'),
-        },
-      ]}
-      backAction={{ onAction: () => navigate('/app') }}
-    >
-      <BlockStack gap="500">
+    <>
+      <OrderPickerModal
+        open={orderPickerOpen}
+        onClose={() => setOrderPickerOpen(false)}
+        onSelect={handleOrderSelect}
+      />
+      <Page
+        title="All Invoices"
+        subtitle={`${invoices.length} total invoices`}
+        primaryAction={{
+          content: 'Create from Orders',
+          onAction: () => setOrderPickerOpen(true),
+        }}
+        secondaryActions={[
+          {
+            content: 'Settings',
+            onAction: () => navigate('/app/settings'),
+          },
+        ]}
+        backAction={{ onAction: () => navigate('/app') }}
+      >
+        <BlockStack gap="500">
         <Banner tone="info">
           <p>
             Select multiple orders from the "Create from Orders" button to generate invoices in bulk.
@@ -261,8 +258,8 @@ export default function InvoicesIndex() {
                 </p>
                 <div style={{ marginTop: '16px' }}>
                   <InlineStack gap="200" align="center">
-                    <Button onClick={openOrderPicker}>Create from Orders</Button>
-                    <Button url="/app/settings">Settings</Button>
+                    <Button onClick={() => setOrderPickerOpen(true)}>Create from Orders</Button>
+                    <Button onClick={() => navigate('/app/settings')}>Settings</Button>
                   </InlineStack>
                 </div>
               </EmptyState>
@@ -329,5 +326,6 @@ export default function InvoicesIndex() {
         </Card>
       </BlockStack>
     </Page>
+    </>
   );
 }
